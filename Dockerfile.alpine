@@ -1,0 +1,114 @@
+#syntax=docker/dockerfile:1
+
+ARG ALPINE_VERSION=3.20
+ARG PYTHON_VERSION=3.12
+ARG SOURCE_IMAGE=docker.io/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}
+ARG BASE_IMAGE_DIGEST
+
+FROM --platform=$BUILDPLATFORM $SOURCE_IMAGE@${BASE_IMAGE_DIGEST} AS buildroot
+ARG PYTHON_VERSION=3.12
+
+ARG BUILD_ROOT='/dest'
+ARG CACHE_ROOT='/cache'
+ENV BUILD_ROOT=$BUILD_ROOT \
+    CACHE_ROOT=$CACHE_ROOT \
+    PYTHON_VERSION=$PYTHON_VERSION \
+    _sys_apk_add="/usr/bin/env apk add --no-cache" \
+    _apk_add="/usr/bin/env apk add --root $BUILD_ROOT --no-cache" \
+    _apk_del="/usr/bin/env apk del --root $BUILD_ROOT --purge" \
+    _sh="chroot $BUILD_ROOT sh" \
+    _ln="chroot $BUILD_ROOT ln" \
+    _chroot="chroot $BUILD_ROOT"
+
+RUN set -eu ; \
+    python -m pip install -U pip setuptools ; \
+    # Add to buildroot:
+    $_sys_apk_add \
+        # dash is used as a /bin/sh replacement
+        dash \
+        # TLS certs
+        ca-certificates \
+        # zip is used to take all the bytecode compiled standard
+        # library and create a pythonXY.zip file that will
+        # be imported from. This makes the stdlib immutable.
+        zip \
+    ; \
+    # remove all ``__pycache__`` directories
+    find /usr/local/lib/python$PYTHON_VERSION -type d -name '__pycache__' -print0 | xargs -0 rm -rf ; \
+    # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
+    python -m compileall -b /usr/local/lib/python$PYTHON_VERSION ; \
+    find -type f -name '*.py' -exec sh -c "[ -f \"{}c\" ] && echo 'Removing \"{}\"' && rm -f \"{}\"" \; ;\
+    # make the new root:
+    mkdir -p \
+        $CACHE_ROOT/ \
+        $BUILD_ROOT/etc \
+        $BUILD_ROOT/bin \
+        $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/site-packages \
+        $BUILD_ROOT/usr/local/bin \
+    ; \
+    # use a symlink to hold the apk related confs
+    ln -s /etc/apk $BUILD_ROOT/etc/apk ; \
+    $_apk_add --initdb ; \
+    $_apk_add \
+        alpine-baselayout-data \
+        alpine-release \
+        musl \
+        libffi \
+        # needed for update-ca-certificates to work:
+        run-parts \
+        # install the runtime dependencies for python
+        $(apk info -R .python-rundeps | grep -vE ':$') \
+        ; \
+    cp -p /bin/busybox $BUILD_ROOT/bin/busybox ; \
+    ls -lt $BUILD_ROOT/bin/busybox ; \
+    chroot $BUILD_ROOT /bin/busybox ln -sf /bin/busybox /bin/ln ; \
+    # copy dash into the container so we can use it as the default bin/sh
+    tar -C / -cpf - $(\
+        apk info -L \
+            dash \
+            ca-certificates \
+        | grep -vE ':$' \
+        ) | tar -C $BUILD_ROOT -xpf - ; \
+    $_ln -sf /usr/bin/dash /bin/sh ; \
+    (\
+        cd /usr/local/lib && \
+        tar -C /usr/local/lib -cpf - python$PYTHON_VERSION/lib-dynload libpython*  | tar -C $BUILD_ROOT/usr/local/lib -xpf - ; \
+        tar -C /usr/local/bin -cpf - python*  | tar -C $BUILD_ROOT/usr/local/bin -xpf -; \
+        (cd python$PYTHON_VERSION && zip -9 -X $BUILD_ROOT/usr/local/lib/python$(echo $PYTHON_VERSION | tr -d '.').zip $(\
+            find . | grep -vE "(__pycache__|^\./(test|site-packages|lib-dynload|idlelib|lib2to3|tkinter|turtle|ensurepip|pydoc))" \
+        )); \
+        cp -p python$PYTHON_VERSION/os.pyc $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/os.pyc ; \
+        touch $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/ensurepip.py ; \
+        rm $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/lib-dynload/_tkinter* ; \
+    ) && \
+    $_ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python3 && \
+    $_ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python && \
+    tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf - ; \
+    rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk /usr/share/apk && \
+    # regenerate the ca-certs!
+    chroot $BUILD_ROOT update-ca-certificates
+
+
+FROM scratch AS distroless-python
+ARG ALPINE_VERSION=3.20
+ARG PYTHON_VERSION=3.12
+ARG SOURCE_IMAGE=docker.io/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}
+ARG BASE_IMAGE_DIGEST
+ARG BUILD_ROOT='/dest'
+ENV BUILD_ROOT=$BUILD_ROOT \
+    PYTHON_VERSION=$PYTHON_VERSION \
+    ALPINE_VERSION=$ALPINE_VERSION
+
+COPY --from=buildroot $BUILD_ROOT /
+LABEL \
+    org.opencontainers.image.authors="distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>" \
+    org.opencontainers.image.source="https://github.com/autumnjolitz/distroless-python" \
+    org.opencontainers.image.title="Distroless Python ${PYTHON_VERSION} on alpine${ALPINE_VERSION}" \
+    org.opencontainers.image.description="Distroless, optimized Python images distilled from the DockerHub official Python images. These images only have a python interpreter and the dash shell." \
+    org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}" \
+    org.opencontainers.image.base.name="$SOURCE_IMAGE" \
+    distroless.python-version="${PYTHON_VERSION}" \
+    distroless.alpine-version="${ALPINE_VERSION}" \
+    distroless.base-image="alpine${ALPINE_VERSION}"
+
+ENTRYPOINT [ "/usr/local/bin/python" ]
