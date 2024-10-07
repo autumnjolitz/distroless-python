@@ -21,6 +21,7 @@ ENV BUILD_ROOT=$BUILD_ROOT \
     _chroot="chroot $BUILD_ROOT"
 
 ADD --chmod=0755 chroot-apk.sh /usr/local/bin/chroot-apk
+ADD --chmod=0755 remove-py-if-pyc-exists.sh /usr/local/bin/remove-py-if-pyc-exists
 RUN set -eu ; \
     python -m pip install -U pip setuptools ; \
     # Add to buildroot:
@@ -38,7 +39,7 @@ RUN set -eu ; \
     find /usr/local/lib/python$PYTHON_VERSION -type d -name '__pycache__' -print0 | xargs -0 rm -rf ; \
     # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
     python -m compileall -b /usr/local/lib/python$PYTHON_VERSION ; \
-    find -type f -name '*.py' -exec sh -c "[ -f \"{}c\" ] && echo 'Removing \"{}\"' && rm -f \"{}\"" \; ;\
+    find -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists {}" \; ;\
     # make the new root:
     mkdir -p \
         $CACHE_ROOT/ \
