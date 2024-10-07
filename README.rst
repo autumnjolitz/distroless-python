@@ -92,6 +92,10 @@ Given the following ``Dockerfile``, we will add ``httpie`` to the image and refe
     ENTRYPOINT ["http"]
 
 
+
+As an additional helper, the ``chroot-apk`` command in the buildroot environment can
+be used to install apk packages.
+
 Build and test the image!
 
 .. code:: bash

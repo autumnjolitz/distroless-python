@@ -5,7 +5,7 @@ ARG PYTHON_VERSION=3.12
 ARG SOURCE_IMAGE=docker.io/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}
 ARG BASE_IMAGE_DIGEST
 
-FROM --platform=$BUILDPLATFORM $SOURCE_IMAGE@${BASE_IMAGE_DIGEST} AS buildroot
+FROM --platform=$BUILDPLATFORM ${SOURCE_IMAGE}@${BASE_IMAGE_DIGEST} AS buildroot
 ARG PYTHON_VERSION=3.12
 
 ARG BUILD_ROOT='/dest'
@@ -20,6 +20,7 @@ ENV BUILD_ROOT=$BUILD_ROOT \
     _ln="chroot $BUILD_ROOT ln" \
     _chroot="chroot $BUILD_ROOT"
 
+ADD --chmod=0755 chroot-apk.sh /usr/local/bin/chroot-apk
 RUN set -eu ; \
     python -m pip install -U pip setuptools ; \
     # Add to buildroot:
@@ -87,7 +88,6 @@ RUN set -eu ; \
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk && \
     # regenerate the ca-certs!
     chroot $BUILD_ROOT update-ca-certificates
-
 
 FROM scratch AS distroless-python
 ARG ALPINE_VERSION=3.20
