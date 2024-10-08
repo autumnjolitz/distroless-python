@@ -21,6 +21,7 @@ ENV BUILD_ROOT=$BUILD_ROOT \
     _chroot="chroot $BUILD_ROOT"
 
 ADD --chmod=0755 chroot-apk.sh /usr/local/bin/chroot-apk
+ADD --chmod=0755 chroot-pip.sh /usr/local/bin/chroot-pip
 ADD --chmod=0755 remove-py-if-pyc-exists.sh /usr/local/bin/remove-py-if-pyc-exists
 RUN set -eu ; \
     python -m pip install -U pip setuptools ; \
