@@ -17,7 +17,15 @@ setup () {
 fini () {
     >&2 echo "Removing APK data from $BUILD_ROOT, storing in $CACHE_ROOT"
     tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf -
+    $_chroot /bin/ln -sf /usr/bin/dash /bin/sh.bak
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk
+    if $_chroot /usr/bin/dash -c '[ ! -x /bin/sh ]'; then
+        >&2 echo '/bin/sh in chroot failed the vibe check, replacing with a symlink to /usr/bin/dash!'
+        mv $BUILD_ROOT/bin/sh.bak $BUILD_ROOT/bin/sh
+    else
+        >&2 echo '/bin/sh passed the vibe check'
+        rm $BUILD_ROOT/bin/sh.bak
+    fi
     return $?
 }
 
