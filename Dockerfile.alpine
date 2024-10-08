@@ -89,7 +89,8 @@ RUN set -eu ; \
     tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf - ; \
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk && \
     # regenerate the ca-certs!
-    chroot $BUILD_ROOT update-ca-certificates
+    chroot $BUILD_ROOT update-ca-certificates && \
+    chroot-pip install --force-reinstall setuptools
 
 FROM scratch AS distroless-python
 ARG ALPINE_VERSION=3.20
