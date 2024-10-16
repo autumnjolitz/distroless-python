@@ -32,4 +32,4 @@ fini () {
 trap fini EXIT
 setup
 set -x
-ln $@
+chroot $BUILD_ROOT /usr/bin/dash -c ln $@
