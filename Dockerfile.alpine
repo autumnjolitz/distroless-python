@@ -107,7 +107,6 @@ ARG BUILD_ROOT='/dest'
 ENV BUILD_ROOT=$BUILD_ROOT \
     PYTHON_VERSION=$PYTHON_VERSION \
     ALPINE_VERSION=$ALPINE_VERSION
-
 COPY --from=buildroot $BUILD_ROOT /
 LABEL \
     org.opencontainers.image.authors="distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>" \
@@ -120,4 +119,5 @@ LABEL \
     distroless.alpine-version="${ALPINE_VERSION}" \
     distroless.base-image="alpine${ALPINE_VERSION}"
 
+SHELL ["/usr/bin/dash", "-c"]
 ENTRYPOINT [ "/usr/local/bin/python" ]
