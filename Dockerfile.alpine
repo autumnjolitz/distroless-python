@@ -27,7 +27,6 @@ RUN set -eu ; \
     python -m pip install -U pip setuptools ; \
     # Add to buildroot:
     $_sys_apk_add \
-        # dash is used as a /bin/sh replacement
         dash \
         # TLS certs
         ca-certificates \
@@ -57,6 +56,12 @@ RUN set -eu ; \
         alpine-release \
         musl \
         libffi \
+        dash \
+        dash-binsh \
+        coreutils-env \
+        ; \
+    $_apk_add \
+        ca-certificates \
         # needed for update-ca-certificates to work:
         run-parts \
         # install the runtime dependencies for python
@@ -66,13 +71,14 @@ RUN set -eu ; \
     ls -lt $BUILD_ROOT/bin/busybox ; \
     chroot $BUILD_ROOT /bin/busybox ln -sf /bin/busybox /bin/ln ; \
     # copy dash into the container so we can use it as the default bin/sh
-    tar -C / -cpf - $(\
-        apk info -L \
-            dash \
-            ca-certificates \
-        | grep -vE ':$' \
-        ) | tar -C $BUILD_ROOT -xpf - ; \
-    $_ln -sf /usr/bin/dash /bin/sh ; \
+    # tar -C / -cpf - $(\
+    #     apk info -L \
+    #         dash \
+    #         dash-binsh \
+    #         ca-certificates \
+    #     | grep -vE ':$' \
+    #     ) | tar -C $BUILD_ROOT -xpf - ; \
+    # $_ln -sf /usr/bin/dash /bin/sh ; \
     (\
         cd /usr/local/lib && \
         tar -C /usr/local/lib -cpf - python$PYTHON_VERSION/lib-dynload libpython*  | tar -C $BUILD_ROOT/usr/local/lib -xpf - ; \
