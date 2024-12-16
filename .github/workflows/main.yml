@@ -57,7 +57,7 @@ jobs:
             '${{ github.repository_owner }}' \
             '${{ matrix.repository }}'
 
-          docker pull "${SOURCE_IMAGE}"
+          docker pull "${SOURCE_IMAGE}" || true
 
           echo ALPINE_VERSION="${ALPINE_VERSION}" >> "$GITHUB_OUTPUT"
           echo PYTHON_VERSION="${PYTHON_VERSION}" >> "$GITHUB_OUTPUT"
