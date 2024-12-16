@@ -17,6 +17,7 @@ jobs:
           - 'ghcr.io'
           - 'docker.io'
         python:
+          - '3.13'
           - '3.12'
           - '3.11'
           - '3.10'
@@ -24,8 +25,13 @@ jobs:
           - '3.8'
         alpine:
           - '3.20'
+          - '3.21'
         os:
           - 'ubuntu-latest'
+        exclude:
+          # No tag
+          - python: '3.8'
+            alpine: '3.21'
 
     runs-on: ${{ matrix.os }}
     permissions:
@@ -68,6 +74,7 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+            linux/arm64/v8
           context: "."
           file: Dockerfile.alpine
           target: buildroot
@@ -88,6 +95,7 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+            linux/arm64/v8
           context: "."
           file: Dockerfile.alpine
           # target: distroless-python
@@ -143,6 +151,7 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+            linux/arm64/v8
           context: "."
           file: Dockerfile.alpine
           target: buildroot
@@ -167,6 +176,7 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+            linux/arm64/v8
           file: Dockerfile.alpine
           cache-from: |
               type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}
