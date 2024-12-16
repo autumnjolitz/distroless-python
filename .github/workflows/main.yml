@@ -73,7 +73,7 @@ jobs:
         with:
           platforms: |
             linux/amd64
-            linux/arm64
+            linux/arm64/v7
             linux/arm64/v8
           context: "."
           file: Dockerfile.alpine
@@ -94,10 +94,9 @@ jobs:
         with:
           platforms: |
             linux/amd64
-            linux/arm64
+            linux/arm64/v7
             linux/arm64/v8
           context: "."
-          load: true
           file: Dockerfile.alpine
           # target: distroless-python
           cache-from: |
@@ -117,8 +116,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: "examples/simple-flask"
-          platforms: linux/amd64
-          load: true
+          platforms: |
+            linux/amd64
+            linux/arm64/v7
+            linux/arm64/v8
           cache-from: |
               type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}
               type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
@@ -151,7 +152,7 @@ jobs:
           push: true
           platforms: |
             linux/amd64
-            linux/arm64
+            linux/arm64/v7
             linux/arm64/v8
           context: "."
           file: Dockerfile.alpine
@@ -176,7 +177,7 @@ jobs:
           context: "."
           platforms: |
             linux/amd64
-            linux/arm64
+            linux/arm64/v7
             linux/arm64/v8
           file: Dockerfile.alpine
           cache-from: |
