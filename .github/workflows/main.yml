@@ -73,6 +73,7 @@ jobs:
         name: Buildroot
         uses: docker/build-push-action@v6
         with:
+          provenance: false
           platforms: |
             linux/amd64
             linux/arm64/v8
@@ -97,6 +98,7 @@ jobs:
         name: distroless
         uses: docker/build-push-action@v6
         with:
+          provenance: false
           platforms: |
             linux/amd64
             linux/arm64/v8
@@ -141,6 +143,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          provenance: false
           platforms: |
             linux/amd64
             linux/arm64/v8
@@ -168,6 +171,7 @@ jobs:
         with:
           push: true
           context: "."
+          provenance: false
           platforms: |
             linux/amd64
             linux/arm64/v8
@@ -204,6 +208,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: "examples/simple-flask"
+          provenance: false
           platforms: |
             linux/amd64
             linux/arm64/v8
