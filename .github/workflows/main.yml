@@ -36,6 +36,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       packages: write
+    env:
+      PLATFORMS: 'linux/amd64 linux/arm64/v8'
 
     steps:
       -
@@ -69,57 +71,57 @@ jobs:
           echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" >> "$GITHUB_OUTPUT"
           echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  >> "$GITHUB_OUTPUT"
 
-      -
-        name: Buildroot
-        uses: docker/build-push-action@v6
-        with:
-          provenance: false
-          platforms: |
-            linux/amd64
-            linux/arm64/v8
-          context: "."
-          file: Dockerfile.alpine
-          target: buildroot
-          cache-to: |
-            type=gha
-          cache-from: |
-            type=gha
-            type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
-            type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-          build-args: |
-              ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
-              BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-              PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
-              SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
-              BUILD_ROOT=/d
-          tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot"
-          outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/buildroot.tar
-      -
-        name: distroless
-        uses: docker/build-push-action@v6
-        with:
-          provenance: false
-          platforms: |
-            linux/amd64
-            linux/arm64/v8
-          context: "."
-          file: Dockerfile.alpine
-          # target: distroless-python
-          cache-from: |
-              type=gha
-              type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}
-              type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
-              type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-          cache-to: |
-              type=gha
-          build-args: |
-              ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
-              BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-              PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
-              SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
-              BUILD_ROOT=/d
-          tags: "${{ steps.image_env.outputs.IMAGE_TAG }}"
-          outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image.tar
+      # -
+      #   name: Buildroot
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     provenance: false
+      #     platforms: |
+      #       linux/amd64
+      #       linux/arm64/v8
+      #     context: "."
+      #     file: Dockerfile.alpine
+      #     target: buildroot
+      #     cache-to: |
+      #       type=gha
+      #     cache-from: |
+      #       type=gha
+      #       type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
+      #       type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #     build-args: |
+      #         ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
+      #         BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #         PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
+      #         SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
+      #         BUILD_ROOT=/d
+      #     tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot"
+      #     outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/buildroot.tar
+      # -
+      #   name: distroless
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     provenance: false
+      #     platforms: |
+      #       linux/amd64
+      #       linux/arm64/v8
+      #     context: "."
+      #     file: Dockerfile.alpine
+      #     # target: distroless-python
+      #     cache-from: |
+      #         type=gha
+      #         type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}
+      #         type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
+      #         type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #     cache-to: |
+      #         type=gha
+      #     build-args: |
+      #         ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
+      #         BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #         PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
+      #         SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
+      #         BUILD_ROOT=/d
+      #     tags: "${{ steps.image_env.outputs.IMAGE_TAG }}"
+      #     outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image.tar
 
       -
         name: Login to GitHub Container Registry
@@ -137,32 +139,43 @@ jobs:
           registry: 'docker.io'
           username: ${{ github.repository_owner }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       -
-        name: Upload Buildroot
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          provenance: false
-          platforms: |
-            linux/amd64
-            linux/arm64/v8
-          context: "."
-          file: Dockerfile.alpine
-          target: buildroot
-          cache-to: |
-            type=gha
-          cache-from: |
-            type=gha
-            type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
-            type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-          build-args: |
-              ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
-              BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
-              PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
-              SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
-              BUILD_ROOT=/d
-          tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot"
+        env:
+          IMAGE_URI: ${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
+          IMAGE_HOME: ${{ steps.image_env.outputs.IMAGE_HOME }}
+        run: |
+          for platform in $PLATFORMS
+          do
+            docker build --platform "$platform" --push --cache-to type=gha --cache-from type=gha --build-arg 'ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}' --build-arg 'BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}' --build-arg 'PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}' --build-arg 'SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}' --build-arg 'BUILD_ROOT=/d' --tag "${IMAGE_URI}-$(echo "${platform}" | tr '/' '-' )" -f Dockerfile.alpine .
+            echo "${IMAGE_URI}-$(echo "${platform}" | tr '/' '-' )" | tee -a $IMAGE_HOME/images.txt
+          done
+          docker manifest create "${IMAGE_URI}" $(cat $IMAGE_HOME/images.txt)
+          docker manifest push "${IMAGE_URI}"
+      # -
+      #   name: Upload Buildroot
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     push: true
+      #     provenance: false
+      #     platforms: |
+      #       linux/amd64
+      #       linux/arm64/v8
+      #     context: "."
+      #     file: Dockerfile.alpine
+      #     target: buildroot
+      #     cache-to: |
+      #       type=gha
+      #     cache-from: |
+      #       type=gha
+      #       type=registry,ref=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot
+      #       type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #     build-args: |
+      #         ALPINE_VERSION=${{ steps.image_env.outputs.ALPINE_VERSION }}
+      #         BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
+      #         PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
+      #         SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
+      #         BUILD_ROOT=/d
+      #     tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot"
       -
         name: Upload
         uses: docker/build-push-action@v6
