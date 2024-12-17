@@ -1,7 +1,7 @@
 #syntax=docker/dockerfile:1
 ARG SOURCE_IMAGE=autumnjolitz/distroless-python:3.12-alpine3.20
 
-FROM --platform=$BUILDPLATFORM ${SOURCE_IMAGE}-buildroot AS buildroot
+FROM --platform=$TARGETPLATFORM ${SOURCE_IMAGE}-buildroot AS buildroot
 
 ADD requirements.txt .
 
@@ -11,7 +11,7 @@ RUN python -m pip install \
         -r requirements.txt
 
 ARG SOURCE_IMAGE=autumnjolitz/distroless-python:3.12-alpine3.20
-FROM --platform=$BUILDPLATFORM ${SOURCE_IMAGE}
+FROM --platform=$TARGETPLATFORM ${SOURCE_IMAGE}
 
 EXPOSE 8080
 
