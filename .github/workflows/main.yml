@@ -39,6 +39,8 @@ jobs:
             alpine: '3.21'
           - python: '3.8'
             alpine: '3.22'
+          - python: '3.14'
+            alpine: '3.20'
 
     runs-on: ${{ matrix.os }}
     permissions:
