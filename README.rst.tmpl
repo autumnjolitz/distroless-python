@@ -15,23 +15,38 @@ distroless-python images
 
 Images
 ---------
+{%- set images = images | sort(attribute="registry,path,tag") %}
+{%- set docker_images = images | selectattr("registry", "eq", "docker.io") | sort(attribute="tag", reverse=True) | list %}
+{%- set ghcr_images = images | selectattr("registry", "eq", "ghcr.io") | sort(attribute="tag", reverse=True) | list %}
+{%- set other_images = images | rejectattr("registry", "eq", "docker.io") | rejectattr("registry", "eq", "ghcr.io") | list %}
 
+{% if docker_images -%}
 DockerHub:
 
-* |dockerhub_py312alpine320|_
-* |dockerhub_py311alpine320|_
-* |dockerhub_py310alpine320|_
-* |dockerhub_py39alpine320|_
-* |dockerhub_py38alpine320|_
+{% for image in docker_images %}
+{%- if not image.tag.endswith("-buildroot")%}
+* `{{ image.path }}:{{ image.tag }} <https://hub.docker.com/r/{{image.path}}/tags?name={{image.tag}}>`_
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 
-
+{% if ghcr_images -%}
 Github Container Repository:
 
-* |ghcr_py312alpine320|_
-* |ghcr_py311alpine320|_
-* |ghcr_py310alpine320|_
-* |ghcr_py39alpine320|_
-* |ghcr_py38alpine320|_
+{% for image in ghcr_images %}
+{%- if not image.tag.endswith("-buildroot")%}
+* `{{ image.url }} <https://github.com/{{image.path}}/pkgs/container/{{image.name}}/versions?filters%5Bversion_type%5D=tagged&filters%5Btag%5D={{image.tag}}>`_
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{% if other_images -%}
+Others:
+
+{% for image in other_images %}
+* `{{ image.url }}@{{image.digest}}` ({{'%0.2f'| format(image.size / 1024 / 1024)}} MiB)
+{%- endfor %}
+{%- endif %}
 
 
 About
@@ -132,28 +147,6 @@ Build and test the image!
 Isn't that neat? Tiny images!
 
 Another example may be found at `examples/simple-flask/ <https://github.com/autumnjolitz/distroless-python/blob/main/examples/simple-flask>`_!
-
-
-.. |dockerhub_py312alpine320| replace:: ``3.12-alpine3.20``
-.. _dockerhub_py312alpine320: https://hub.docker.com/r/autumnjolitz/distroless-python/tags?name=3.12-alpine3.20
-.. |dockerhub_py311alpine320| replace:: ``3.11-alpine3.20``
-.. _dockerhub_py311alpine320: https://hub.docker.com/r/autumnjolitz/distroless-python/tags?name=3.11-alpine3.20
-.. |dockerhub_py310alpine320| replace:: ``3.10-alpine3.20``
-.. _dockerhub_py310alpine320: https://hub.docker.com/r/autumnjolitz/distroless-python/tags?name=3.10-alpine3.20
-.. |dockerhub_py39alpine320| replace:: ``3.9-alpine3.20``
-.. _dockerhub_py39alpine320: https://hub.docker.com/r/autumnjolitz/distroless-python/tags?name=3.9-alpine3.20
-.. |dockerhub_py38alpine320| replace:: ``3.8-alpine3.20``
-.. _dockerhub_py38alpine320: https://hub.docker.com/r/autumnjolitz/distroless-python/tags?name=3.8-alpine3.20
-.. |ghcr_py312alpine320| replace:: ``ghcr.io/autumnjolitz/distroless-python:3.12-alpine3.20``
-.. _ghcr_py312alpine320: https://github.com/autumnjolitz/distroless-python/pkgs/container/distroless-python/versions?filters%5Bversion_type%5D=tagged
-.. |ghcr_py311alpine320| replace:: ``ghcr.io/autumnjolitz/distroless-python:3.11-alpine3.20``
-.. _ghcr_py311alpine320: https://github.com/autumnjolitz/distroless-python/pkgs/container/distroless-python/versions?filters%5Bversion_type%5D=tagged
-.. |ghcr_py310alpine320| replace:: ``ghcr.io/autumnjolitz/distroless-python:3.10-alpine3.20``
-.. _ghcr_py310alpine320: https://github.com/autumnjolitz/distroless-python/pkgs/container/distroless-python/versions?filters%5Bversion_type%5D=tagged
-.. |ghcr_py39alpine320| replace:: ``ghcr.io/autumnjolitz/distroless-python:3.9-alpine3.20``
-.. _ghcr_py39alpine320: https://github.com/autumnjolitz/distroless-python/pkgs/container/distroless-python/versions?filters%5Bversion_type%5D=tagged
-.. |ghcr_py38alpine320| replace:: ``ghcr.io/autumnjolitz/distroless-python:3.8-alpine3.20``
-.. _ghcr_py38alpine320: https://github.com/autumnjolitz/distroless-python/pkgs/container/distroless-python/versions?filters%5Bversion_type%5D=tagged
 
 
 .. |github-actions| image:: https://github.com/autumnjolitz/distroless-python/actions/workflows/main.yml/badge.svg
