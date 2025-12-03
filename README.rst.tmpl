@@ -1,5 +1,6 @@
+==========================
 distroless-python images
-=================================
+==========================
 
 .. list-table::
     :stub-columns: 1
@@ -15,9 +16,9 @@ distroless-python images
 
 Images
 ---------
-{%- set images = images | sort(attribute="registry,path,tag") %}
-{%- set docker_images = images | selectattr("registry", "eq", "docker.io") | sort(attribute="tag", reverse=True) | list %}
-{%- set ghcr_images = images | selectattr("registry", "eq", "ghcr.io") | sort(attribute="tag", reverse=True) | list %}
+{%- set images = images | sort(attribute="registry,path") | sort(reverse=True, attribute="tag") %}
+{%- set docker_images = images | selectattr("registry", "eq", "docker.io") | list %}
+{%- set ghcr_images = images | selectattr("registry", "eq", "ghcr.io") | list %}
 {%- set other_images = images | rejectattr("registry", "eq", "docker.io") | rejectattr("registry", "eq", "ghcr.io") | list %}
 
 {% if docker_images -%}
