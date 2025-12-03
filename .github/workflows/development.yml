@@ -93,6 +93,8 @@ jobs:
           platforms: ${{ env.TARGET_PLATFORMS }}
           context: "."
           file: Dockerfile.alpine
+          sbom: true
+          provenance: mode=max
           target: buildroot
           cache-to: |
             type=gha,mode=max
@@ -137,6 +139,7 @@ jobs:
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
           labels: ${{steps.image_env.outputs.IMAGE_LABELS}}
           sbom: true
+          provenance: mode=max
           annotations: |
               index,manifest:org.opencontainers.image.authors=distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>
               index,manifest:org.opencontainers.image.source=https://github.com/autumnjolitz/distroless-python
