@@ -6,19 +6,25 @@ on:
     # https://crontab.guru/once-a-week
     - cron: "0 0 * * 0"
   push:
-    branches: main
+    branches:    
+      - 'main'
+
 
 env:
   TARGET_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   docker:
+    services:
+      registry:
+        image: registry:3
+        ports:
+          - 5000:5000
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         repository:
-          - 'ghcr.io'
-          - 'docker.io'
+          - 'localhost:5000'
         python:
           - '3.14'
           - '3.13'
@@ -82,22 +88,6 @@ jobs:
           echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
           echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" >> "$GITHUB_OUTPUT"
           echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  >> "$GITHUB_OUTPUT"
-      -
-        name: Login to GitHub Container Registry
-        if: ${{ matrix.repository == 'ghcr.io' }}
-        uses: docker/login-action@v3
-        with:
-          registry: 'ghcr.io'
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      -
-        name: Login to DockerHub
-        if: ${{ matrix.repository == 'docker.io' }}
-        uses: docker/login-action@v3
-        with:
-          registry: 'docker.io'
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       -
         name: Create Buildroot
@@ -108,6 +98,8 @@ jobs:
           platforms: ${{ env.TARGET_PLATFORMS }}
           context: "."
           file: Dockerfile.alpine
+          sbom: true
+          provenance: mode=max
           target: buildroot
           cache-to: |
             type=gha,mode=max
@@ -152,6 +144,7 @@ jobs:
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
           labels: ${{steps.image_env.outputs.IMAGE_LABELS}}
           sbom: true
+          provenance: mode=max
           annotations: |
               index,manifest:org.opencontainers.image.authors=distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>
               index,manifest:org.opencontainers.image.source=https://github.com/autumnjolitz/distroless-python
@@ -188,19 +181,6 @@ jobs:
           echo '${{ steps.image_env.outputs.IMAGE_TAG }}@'"$IMAGE_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           echo '${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG }}@'"$IMAGE_BUILDROOT_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           ls ${{ steps.image_env.outputs.IMAGE_HOME }}
-      - name: Fetch packages version ID
-        if: ${{ matrix.repository == 'ghcr.io' }}
-        id: fetch_version_ids
-        run: |
-          tag=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f1 | rev)
-          package_name=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f2- | cut -d/ -f1 | rev)
-          repo_name=${{ github.repository }}
-          owner=${{ github.repository_owner }}
-          version_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
-              jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
-          package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
-          echo "${{steps.image_env.outputs.IMAGE_TAG}}@$package_url" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/packages.txt
 
       - name: upload build
         uses: actions/upload-artifact@v4
@@ -221,7 +201,6 @@ jobs:
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
-
   update-dockerhub-desc:
     needs: [docker]
     runs-on: "ubuntu-latest"
@@ -235,19 +214,62 @@ jobs:
       -
         name: install dependencies
         run: |
+          apt-get -y install skopeo
           python -m pip install jinplate
+
+
       - 
-        name: fetch metadata
+        name: fetch images
         uses: actions/download-artifact@v5
         with:
-          pattern: metadata-*
+          pattern: images-*
           path: dist-images
+          merge-multiple: true
+
+      -
+        name: prep files
+        run: |
+          printf "Images:\n\n" >> "$GITHUB_STEP_SUMMARY"
+          for filename in $(find dist-images -type f -name "*.tar" -print)
+          do
+            image_uri="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
+            for repository in docker.io ghcr.io
+            do
+              new_image_uri=$(echo $image_uri | sed 's|localhost:5000|'"$repository"'|g')
+              new_filename="dist-images/image-$(echo $new_image_uri | base64 -w 0).tar"
+              cp ${filename} ${new_filename}
+              echo '* `'${new_filename}'` (`'${new_image_uri}'`)' >> "$GITHUB_STEP_SUMMARY"
+            done
+            rm $filename
+          done
+
+      - name: login to registry
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf "${GITHUB_TOKEN}\n" | skopeo login --password-stdin --username ${{ github.repository_owner }} ghcr.io
+          printf "${DOCKERHUB_TOKEN}\n" | skopeo login --password-stdin --username ${{ github.repository_owner }} docker.io
+
+      -
+        name: upload to registry
+        run: |
+          printf '#Upload to registry\n\n' >> "$GITHUB_STEP_SUMMARY"
+          for filename in $(find dist-images -type f -name "*.tar" -print)
+          do
+            IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
+            echo "uploading $IMAGE_URI"
+            T="$(mktemp)"
+            skopeo copy --multi-arch all --digestfile $T oci-archive://$PWD/$filename "docker://$IMAGE_URI"
+            IMAGE_DIGEST="$(cat $T)"
+            rm -f $T
+            >>./manifest.txt echo "${IMAGE_URI}@${IMAGE_DIGEST}"
+            printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >> "$GITHUB_STEP_SUMMARY"
+          done
+
       -
         name: aggregate metadata
         run: |
-          cat $(find dist-images -type f -name manifest.txt -print) > manifest.txt
-          cat $(find dist-images -type f -name packages.txt -print) > packages.txt
-          find dist-images -type f \( -name manifest.txt -o -name packages.txt \) -delete
           {
             printf '### manifest.txt\n\n'
             printf '```\n'
@@ -260,14 +282,6 @@ jobs:
             cat packages.txt
             printf '```\n'
           } >>"$GITHUB_STEP_SUMMARY"
-
-      - 
-        name: fetch images
-        uses: actions/download-artifact@v5
-        with:
-          pattern: images-*
-          path: dist-images
-          merge-multiple: true
       -
         name: parse metadata for README
         run: |
@@ -308,8 +322,8 @@ jobs:
         name: Print out markdown
         run: |
           cat README.md >>"$GITHUB_STEP_SUMMARY"
-
-      - name: Update repo description
+      - 
+        name: Update repo description
         uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae # v4.0.0
         with:
           username: ${{ github.repository_owner }}
