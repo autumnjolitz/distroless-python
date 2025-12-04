@@ -219,7 +219,6 @@ jobs:
           set -o pipefail
 
           run_test () {
-            printf '## Test\n\n'
             local rv=0
             local T="$(mktemp)"
             trap 'rm -f '"$T" RETURN
@@ -231,9 +230,7 @@ jobs:
             printf '`%s` (returned code: ' "$@"
             printf '%s)\n```\n' "$rv"
             cat "$T"
-            printf '\n```\n\n### images\n\n```'
-            docker images --tree $IMAGE_URI | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"
-            printf '\n```\n'
+            printf '\n```\n\n'
             return "$rv"
           }
 
@@ -249,30 +246,47 @@ jobs:
             docker pull --platform $platform -q "$IMAGE_URI"
             >&2 printf 'pulled %s (%s)\n' "$IMAGE_TAG" "$platform"
           done
-          container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
-          if [ $rc -ne 0 ]; then
-            printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
-              -a "$GITHUB_OUTPUT"
-            exit $rc
-          fi
-          trap 'docker stop $container_id' EXIT
+          {
+            printf '## images\n\n```'
+            docker images --tree $IMAGE_URI | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"
+            printf '\n```\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
-          start_ts=$(date +%s)
-          until [ x$(curl \
-            --silent --output /dev/null \
-            -w '%{http_code}\n' --fail 'http://localhost:8080/') = x200 ]
+          for platform in $(echo $TARGET_PLATFORMS | tr , '\n')
           do
-            sleep 1
-            if [ "$(expr "${start_ts}" \+ 30)" -lt "$(date +%s)" ]; then
-              >&2 echo 'failed to get a good response in 30 seconds!'
-              break
+            rc=0
+            container_id="$(docker run \
+              --platform $platform \
+              --detach -p 8080:8080 \
+              --rm $IMAGE_URI)" || rc=$?
+            trap 'docker stop $container_id' EXIT
+            if [ $rc -ne 0 ]; then
+              printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
+                -a "$GITHUB_OUTPUT"
+              exit $rc
             fi
+            start_ts=$(date +%s)
+            until [ x$(curl \
+              --silent --output /dev/null \
+              -w '%{http_code}\n' --fail 'http://localhost:8080/') = x200 ]
+            do
+              sleep 1
+              if [ "$(expr "${start_ts}" \+ 30)" -lt "$(date +%s)" ]; then
+                >&2 echo 'failed to get a good response in 30 seconds!'
+                break
+              fi
+            done
+   
+            rc=0
+            printf '## Test (%s)\n\n' $platform | tee -a "$GITHUB_STEP_SUMMARY"
+            (run_test "$test_command" | tee -a "$GITHUB_STEP_SUMMARY") || rc=$?
+            if [ $rc -ne 0 ]; then
+              exit $rc
+            fi
+            trap -- EXIT
+            docker stop $container_id
           done
-          rc=0
-          (run_test "$test_command" | tee -a "$GITHUB_STEP_SUMMARY") || rc=$?
-          if [ $rc -ne 0 ]; then
-            exit $rc
-          fi
+
 
       -
         id: post_build
