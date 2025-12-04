@@ -214,7 +214,7 @@ jobs:
       -
         name: install dependencies
         run: |
-          apt-get -y install skopeo
+          sudo apt-get -y install skopeo
           python -m pip install jinplate
 
 
