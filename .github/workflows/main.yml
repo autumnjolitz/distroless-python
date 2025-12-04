@@ -266,7 +266,6 @@ jobs:
               skopeo copy \
                 --quiet \
                 --retry-times 32 \
-                --image-parallel-copies 4 \
                 --multi-arch all \
                 --dest-precompute-digests \
                 --digestfile "$T" \
@@ -279,6 +278,7 @@ jobs:
             } &
           done
           wait
+          echo 'Done uploading'
 
         # tag=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f1 | rev)
         # package_name=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f2- | cut -d/ -f1 | rev)
