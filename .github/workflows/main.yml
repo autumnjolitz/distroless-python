@@ -92,6 +92,9 @@ jobs:
         name: Create Buildroot
         uses: docker/build-push-action@v6
         id: buildroot
+        env:
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           push: true
           platforms: ${{ env.TARGET_PLATFORMS }}
@@ -121,6 +124,8 @@ jobs:
         uses: docker/build-push-action@v6
         env:
           SOURCE_DATE_EPOCH: 0
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           push: true
           context: "."
@@ -158,6 +163,9 @@ jobs:
       -
         name: examples/simple-flask
         uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: "examples/simple-flask"
           platforms: ${{ env.TARGET_PLATFORMS }}
