@@ -53,6 +53,10 @@ ALPINE_VERSION="${1:-}"
 PYTHON_VERSION="${2:-}"
 ORG="${3:-}"
 
+if case "$ALPINE_VERSION" in alpine*) true ;; *) false ;; esac ; then
+    ALPINE_VERSION="$(echo "$ALPINE_VERSION" | sed 's|alpine||g')"
+fi
+
 if [ "x${ALPINE_VERSION}" = 'x' ]; then
     >&2 echo 'missing ALPINE_VERSION'
     exit 1
@@ -62,6 +66,8 @@ if [ "x${PYTHON_VERSION}" = 'x' ]; then
     >&2 echo 'missing PYTHON_VERSION'
     exit 1
 fi
+
+
 
 REPOSITORY="${4:-}"
 
