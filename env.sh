@@ -1,14 +1,10 @@
 RETURN=RETURN
-if >/dev/null 2>&1 ( set -o pipefail ); then
-    set -o pipefail
-fi 
-if >/dev/null 2>&1  ( shopt -s nullglob ); then
-    shopt -s nullglob
-fi
+set -o pipefail
+shopt -s nullglob
 _testrap() {
     trap '' RETURN
 }
-if ! >/dev/null 2>&1 ( _testrap ) ; then
+if ! _testrap ; then
     RETURN=EXIT
 fi
 set -eu
