@@ -209,7 +209,7 @@ jobs:
             printf '%s)\n```\n' "$rv"
             cat "$T"
             printf '\n```\n\n### images\n\n```'
-            docker images --tree $IMAGE_URI | cat
+            docker images --tree $IMAGE_URI | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"
             printf '\n```\n'
             return "$rv"
           }
