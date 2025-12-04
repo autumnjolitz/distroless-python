@@ -21,8 +21,6 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        repository:
-          - 'localhost:5000'
         python:
           - '3.14'
           - '3.13'
@@ -67,7 +65,7 @@ jobs:
             '${{ matrix.alpine }}' \
             '${{ matrix.python }}' \
             '${{ github.repository_owner }}' \
-            '${{ matrix.repository }}'
+            'localhost:5000'
 
           docker pull "${SOURCE_IMAGE}" || true
           echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
@@ -176,26 +174,12 @@ jobs:
           echo '${{ steps.image_env.outputs.IMAGE_TAG }}@'"$IMAGE_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           echo '${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG }}@'"$IMAGE_BUILDROOT_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           ls ${{ steps.image_env.outputs.IMAGE_HOME }}
-      - name: Fetch packages version ID
-        if: ${{ matrix.repository == 'ghcr.io' }}
-        id: fetch_version_ids
-        run: |
-          tag=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f1 | rev)
-          package_name=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f2- | cut -d/ -f1 | rev)
-          repo_name=${{ github.repository }}
-          owner=${{ github.repository_owner }}
-          version_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
-              jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
-          package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
-          echo "${{steps.image_env.outputs.IMAGE_TAG}}@$package_url" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/packages.txt
-
       - name: upload build
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 1
-          name: images-${{steps.image_env.outputs.REPOSITORY_SAFE}}-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
+          name: images-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar
@@ -205,7 +189,7 @@ jobs:
         with:
           if-no-files-found: error
           retention-days: 1
-          name: metadata-${{steps.image_env.outputs.REPOSITORY_SAFE}}-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
+          name: metadata-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 

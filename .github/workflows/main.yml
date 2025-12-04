@@ -23,8 +23,6 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        repository:
-          - 'localhost:5000'
         python:
           - '3.14'
           - '3.13'
@@ -49,9 +47,6 @@ jobs:
             alpine: '3.20'
 
     runs-on: ${{ matrix.os }}
-    permissions:
-      packages: write
-
     steps:
       -
         name: Checkout
@@ -72,7 +67,7 @@ jobs:
             '${{ matrix.alpine }}' \
             '${{ matrix.python }}' \
             '${{ github.repository_owner }}' \
-            '${{ matrix.repository }}'
+            'localhost:5000'
 
           docker pull "${SOURCE_IMAGE}" || true
           echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
@@ -187,7 +182,7 @@ jobs:
         with:
           if-no-files-found: error
           retention-days: 1
-          name: images-${{steps.image_env.outputs.REPOSITORY_SAFE}}-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
+          name: images-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar
@@ -197,13 +192,17 @@ jobs:
         with:
           if-no-files-found: error
           retention-days: 1
-          name: metadata-${{steps.image_env.outputs.REPOSITORY_SAFE}}-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
+          name: metadata-alpine${{steps.image_env.outputs.ALPINE_VERSION}}-python${{steps.image_env.outputs.PYTHON_VERSION}}
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
   update-dockerhub-desc:
     needs: [docker]
     runs-on: "ubuntu-latest"
+
+    permissions:
+      packages: write
+
     steps:
       -
         name: Checkout
@@ -259,13 +258,34 @@ jobs:
           do
             IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
             echo "uploading $IMAGE_URI"
-            T="$(mktemp)"
-            skopeo copy --multi-arch all --digestfile $T oci-archive://$PWD/$filename "docker://$IMAGE_URI"
-            IMAGE_DIGEST="$(cat $T)"
-            rm -f $T
-            >>./manifest.txt echo "${IMAGE_URI}@${IMAGE_DIGEST}"
-            printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >> "$GITHUB_STEP_SUMMARY"
+            {
+              T="$(mktemp)"
+              skopeo copy \
+                --quiet \
+                --retry-times 32 \
+                --image-parallel-copies 4 \
+                --multi-arch all \
+                --dest-precompute-digests \
+                --digestfile "$T" \
+                  oci-archive://$PWD/$filename "docker://$IMAGE_URI"
+              IMAGE_DIGEST="$(cat $T)"
+              rm -f $T
+              echo "${IMAGE_URI}@${IMAGE_DIGEST}" | tee -a ./manifest.txt
+              printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >> "$GITHUB_STEP_SUMMARY"
+            } & ;
           done
+          wait
+
+        # tag=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f1 | rev)
+        # package_name=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f2- | cut -d/ -f1 | rev)
+        # repo_name=${{ github.repository }}
+        # owner=${{ github.repository_owner }}
+        # version_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+        #     "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
+        #     jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
+        # package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
+        # echo "${{steps.image_env.outputs.IMAGE_TAG}}@$package_url" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/packages.txt
+
 
       -
         name: aggregate metadata
