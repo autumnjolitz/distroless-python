@@ -255,40 +255,98 @@ jobs:
       -
         name: upload to registry
         run: |
-          printf '#Upload to registry\n\n' >> "$GITHUB_STEP_SUMMARY"
-          for filename in $(find dist-images -type f -name "*.tar" -print)
-          do
-            IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
-            {
-              START_TIME=$(date +%s)
-              echo "uploading $IMAGE_URI"
-              T="$(mktemp)"
+
+          upload_image () {
+              local manifest_file=
+              local packages_file=
+              local image_digest=
+              local filename="$1"
+              shift
+              local image_uri="$1"
+              shift
+              if [ x$1 != x ]; then
+                manifest_file="$1"
+                shift
+              fi
+              if [ x$1 != x ]; then
+                packages_file="$1"
+                shift
+              fi
+              if ! case "$filename" in /*) true ;; *) false ;; esac ; then
+                filename="$(realpath $filename)"
+              fi
+
+              local START_TIME=$(date +%s)
+              local T="$(mktemp)"
+              local rc=0
+              >&2 echo "uploading ${image_uri}"
               skopeo copy \
                 --quiet \
                 --retry-times 32 \
                 --multi-arch all \
                 --dest-precompute-digests \
                 --digestfile "$T" \
-                  oci-archive://$PWD/$filename "docker://$IMAGE_URI"
-              IMAGE_DIGEST="$(cat $T)"
+                  oci-archive://$filename "docker://$image_uri" || rc=$?
+              if [ $rc -ne 0 ]; then
+                echo 'failed to upload '$image_uri' (return code: '$rc')!' >>"$GITHUB_STEP_SUMMARY"
+                rm -f $T
+                return $rc
+              fi
+              image_digest="$(cat $T)"
               rm -f $T
-              echo "${IMAGE_URI}@${IMAGE_DIGEST}" | tee -a ./manifest.txt
-              printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >>"$GITHUB_STEP_SUMMARY"
-              echo "uploaded $IMAGE_URI in $(expr $(date +%s) - $START_TIME) seconds"
-            } &
+              if [ x$manifest_file != x ]; then
+                >>"$manifest_file" echo "${image_uri}@${image_digest}"
+              fi
+              printf '* '"${image_uri}@${image_digest}"'\n' >>"$GITHUB_STEP_SUMMARY"
+              >&2 echo "uploaded ${image_uri} in $(expr $(date +%s) - $START_TIME) seconds"
+              echo "${image_uri}@${image_digest}"
+              if case $image_uri in 'ghcr.io'*) true ;; *) false ;; esac ; then
+                ghcr_artifact_url "${image_uri}" "${packages_file}"
+              fi
+          }
+
+          ghcr_artifact_url () {
+            local output=-
+            local image_tag="$1"
+            shift
+            if ! case $image_tag in 'ghcr.io'*) true ;; *) false ;; esac ; then
+              >&2 echo 'image '"$image_tag"' is not a ghcr.io one!'
+              return 1
+            fi
+            if [ x"$1" != x ]; then
+              output="$1"
+              shift
+            fi
+            local tag=$(echo "${image_tag}" | rev | cut -d: -f1 | rev)
+            local package_name=$(echo "${image_tag}" | rev | cut -d: -f2- | cut -d/ -f1 | rev)
+            local repo_name='${{ github.repository }}'
+            local owner='${{ github.repository_owner }}'
+            local version_id=$(curl -s -H "Authorization: Bearer "'${{ secrets.GITHUB_TOKEN }}' \
+                "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
+                jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
+            local package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
+            if ! [ x$output = x -o x$output = x- ]; then
+              >>"$output" echo "${image_tag}@${package_url}"
+            else
+              echo "${image_tag}@${package_url}"
+            fi
+          }
+
+          printf '#Upload to registry\n\n' >> "$GITHUB_STEP_SUMMARY"
+          num_outstanding=0
+          concurrency_limit=4
+          for filename in $(find dist-images -type f -name "*.tar" -print)
+          do
+            IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
+            upload_image "$filename" "$IMAGE_URI" ./manifest.txt ./packages.txt &
+            num_outstanding=$(expr $num_outstanding \+ 1)
+            if [ $num_outstanding -ge $concurrency_limit ]; then
+              wait
+              num_outstanding=0
+            fi
           done
           wait
           echo 'Done uploading'
-
-        # tag=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f1 | rev)
-        # package_name=$(echo ${{ steps.image_env.outputs.IMAGE_TAG }} | rev | cut -d: -f2- | cut -d/ -f1 | rev)
-        # repo_name=${{ github.repository }}
-        # owner=${{ github.repository_owner }}
-        # version_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-        #     "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
-        #     jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
-        # package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
-        # echo "${{steps.image_env.outputs.IMAGE_TAG}}@$package_url" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/packages.txt
 
 
       -
