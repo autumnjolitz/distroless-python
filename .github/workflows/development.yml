@@ -174,11 +174,54 @@ jobs:
               type=registry,ref=${{ steps.image_env.outputs.SOURCE_IMAGE }}@${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
           build-args: |
               SOURCE_IMAGE=${{ steps.image_env.outputs.IMAGE_TAG }}
-          tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-example1-amd64"
+          tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-example1"
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
       - 
         id: test
+        env:
+          IMAGE_URI: '${{ steps.image_env.outputs.IMAGE_TAG }}-example1'
+          IMAGE_ARCHIVE: '${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar'
         run: |
+          set -o pipefail
+          docker image load -i "$IMAGE_ARCHIVE"
+          rc=0
+          container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
+          if [ $rc -ne 0 ]; then
+            printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
+              -a "$GITHUB_OUTPUT"
+            exit $rc
+          fi
+          trap 'docker stop $container_id' EXIT
+          start_ts=$(date +%s)
+          test_command="curl -sLv 'http://localhost:8080/'"
+
+          run_test () {
+            local rc=0
+            local T="$(mktemp)"
+            trap 'rm -f '"$T" RETURN
+            >"$T" 2>&1 eval $test_command || rc=$?
+            printf '`%s` (returned code: ' "$test_command"
+            printf '%s)\n```\n' "$rc"
+            cat "$T"
+            printf '\n```\n\n'
+            return "$rc"
+          }
+
+          until [ x$(curl \
+            --silent --output /dev/null \
+            -w '%{http_code}\n' --fail 'http://localhost:8080/') = x200 ]
+          do
+            sleep 1
+            if [ "$(expr "${start_ts}" \+ 30)" -lt "$(date +%s)" ]; then
+              >&2 echo 'failed to get a good response in 30 seconds!'
+              break
+            fi
+          done
+          rc=0
+          (run_test | tee -a "$GITHUB_STEP_SUMMARY) || rc=$?
+          if [ $rc -ne 0 ]; then
+            exit $rc
+          fi
 
       -
         id: post_build
