@@ -268,7 +268,7 @@ jobs:
             start_ts=$(date +%s)
             until [ x$(curl \
               --silent --output /dev/null \
-              -w '%{http_code}\n' --fail 'http://localhost:8080/') = x200 ]
+              -w '%{http_code}\n' --fail 'http://localhost:8080/_health') = x200 ]
             do
               sleep 1
               if [ "$(expr "${start_ts}" \+ 30)" -lt "$(date +%s)" ]; then
@@ -278,7 +278,7 @@ jobs:
             done
    
             rc=0
-            printf '## Test (%s)\n\n' $platform | tee -a "$GITHUB_STEP_SUMMARY"
+            printf '## Test (%s)\n\n' "$(curl 'http://localhost:8080/_arch')" | tee -a "$GITHUB_STEP_SUMMARY"
             (run_test "$test_command" | tee -a "$GITHUB_STEP_SUMMARY") || rc=$?
             if [ $rc -ne 0 ]; then
               exit $rc
