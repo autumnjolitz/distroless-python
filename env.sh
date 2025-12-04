@@ -28,11 +28,8 @@ digest_of() {
     exec 3<> "$PIPE"
     rm $PIPE
     if [ "x$log" = 'x' ]; then
-        PIPE="$(mktemp -u)"
-        mkfifo "$PIPE"
-        exec 4<>"$PIPE"
-        rm $PIPE
-        trap "exec 4>&-;exec 3>&-" $RETURN
+        log="$(mktemp -t digest_of.log.XXXX)"
+        trap "rm -f $log;exec 3>&-" $RETURN
     else
         trap "exec 3>&-" $RETURN
     fi
