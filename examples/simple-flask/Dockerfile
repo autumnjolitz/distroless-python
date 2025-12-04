@@ -1,13 +1,12 @@
 #syntax=docker/dockerfile:1
 ARG SOURCE_IMAGE=autumnjolitz/distroless-python:3.12-alpine3.20
 
-FROM --platform=$TARGETPLATFORM ${SOURCE_IMAGE}-buildroot AS buildroot
+FROM ${SOURCE_IMAGE}-buildroot AS buildroot
 
 ADD requirements.txt .
 
-RUN python -m pip install \
+RUN chroot-pip install \
         --no-cache \
-        --prefix "$BUILD_ROOT/usr/local" \
         -r requirements.txt
 
 ARG SOURCE_IMAGE=autumnjolitz/distroless-python:3.12-alpine3.20
