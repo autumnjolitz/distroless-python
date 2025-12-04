@@ -1,5 +1,5 @@
 RETURN=RETURN
-if >/dev/null 2>&1 (set -o pipefail); then
+if >/dev/null 2>&1 ( set -o pipefail ); then
     set -o pipefail
 fi 
 if >/dev/null 2>&1  ( shopt -s nullglob ); then
