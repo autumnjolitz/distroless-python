@@ -16,11 +16,6 @@ env:
 jobs:
   build_images:
     name: "Create runtime and buildroot OCI Images"
-    services:
-      registry:
-        image: registry:3
-        ports:
-          - 5000:5000
     strategy:
       fail-fast: true
       matrix:
@@ -55,11 +50,17 @@ jobs:
       -
         name: Setup
         run: |
-
+          setup_registry () {
+            registry_id=$(docker run \
+              -p5000:5000 \
+              --name registry \
+              --rm -d registry:3)
+            echo 'Started registry at '$registry_id
+          }
           setup_containerd_snapshotter () {
             local _sudo=sudo
             if [ $(id -u) -eq 0 ]; then
-              _sudo=
+              _sudo=sudo
             fi
             if ! [ -f /etc/docker/daemon.json ]; then
               eval $_sudo mkdir -p /etc/docker
@@ -78,6 +79,8 @@ jobs:
 
           sudo apt-get -y install skopeo
           setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
+          printf '## Registry info:\n\n' | tee -a "$GITHUB_STEP_SUMMARY"
+          setup_registry | tee -a "$GITHUB_STEP_SUMMARY"
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
