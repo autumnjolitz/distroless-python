@@ -36,7 +36,7 @@ Github Container Repository:
 
 {% for image in ghcr_images %}
 {%- if not image.tag.endswith("-buildroot")%}
-* `{{ image.url }} <https://github.com/{{image.path}}/pkgs/container/{{image.name}}/versions?filters%5Bversion_type%5D=tagged&filters%5Btag%5D={{image.tag}}>`_
+* `{{ image.url }} <{{ image.package_url }}>`_
 {%- endif %}
 {%- endfor %}
 {%- endif %}
