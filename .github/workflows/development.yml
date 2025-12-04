@@ -10,6 +10,8 @@ on:
 
 env:
   TARGET_PLATFORMS: linux/amd64,linux/arm64
+  COMPOSE_DOCKER_CLI_BUILD: '1'
+  DOCKER_BUILDKIT: '1'
 
 jobs:
   build_images:
@@ -215,11 +217,17 @@ jobs:
           }
 
           rc=0
+          REMOTE_DIGEST="$(skopeo inspect --raw "$IMAGE_URI" | skopeo manifest-digest /dev/stdin)"
+          if [ "$REMOTE_DIGEST" != "${IMAGE_DIGEST}" ]; then
+            echo 'generated a diferent manifest than '"${IMAGE_DIGEST}"': '"$REMOTE_DIGEST"
+            exit 2
+          fi
+          docker pull -q "$(echo "$IMAGE_URI" | rev | cut -d: -f2- | rev )@${IMAGE_DIGEST}"
           for platform in $(echo $TARGET_PLATFORMS | tr , '\n')
           do
             docker pull --platform $platform -q "$IMAGE_URI"
+            >&2 printf 'pulled %s (%s)\n' "$IMAGE_TAG" "$platform"
           done
-          docker pull -q "$IMAGE_URI"
           container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
           if [ $rc -ne 0 ]; then
             printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
