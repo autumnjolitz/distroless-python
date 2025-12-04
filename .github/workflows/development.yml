@@ -3,7 +3,7 @@ name: development
 on:
   pull_request:
   push:
-    branches:    
+    branches:
       - '!main'     # excludes main
       - '!master'   # excludes master
 
@@ -215,12 +215,12 @@ jobs:
         uses: actions/checkout@v4
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12' 
+          python-version: '3.12'
       -
         name: install dependencies
         run: |
           python -m pip install jinplate
-      - 
+      -
         name: fetch metadata
         uses: actions/download-artifact@v5
         with:
@@ -245,7 +245,7 @@ jobs:
             printf '```\n'
           } >>"$GITHUB_STEP_SUMMARY"
 
-      - 
+      -
         name: fetch images
         uses: actions/download-artifact@v5
         with:
