@@ -1,35 +1,56 @@
+RETURN=RETURN
+if >/dev/null 2>&1 (set -o pipefail); then
+    set -o pipefail
+fi 
+if >/dev/null 2>&1  ( shopt -s nullglob ); then
+    shopt -s nullglob
+fi
+_testrap() {
+    trap '' RETURN
+}
+if ! >/dev/null 2>&1 ( _testrap ) ; then
+    RETURN=EXIT
+fi
 set -eu
-set -o pipefail
-shopt -s nullglob
 
-
-jq="$(command -v jq)"
+skopeo=$(command -v skopeo)
 
 digest_of() {
+    local rc=
     local repo="${1:-}"
     local log="${2:-}"
-    if [ "x$jq" = 'x' ]; then
-        >&2 echo 'jq not installed!'
-        return 101
+    if [ x$skopeo = x ]; then
+        >&2 echo 'skopeo not installed!'
+        return 102
     fi
     if [ "x$repo" = 'x' ]; then
         >&2 echo 'no repo provided!'
         return 1
     fi
-    local PIPE=$(mktemp -u)
+    local PIPE="$(mktemp -u)"
     mkfifo "$PIPE"
     exec 3<> "$PIPE"
     rm $PIPE
     if [ "x$log" = 'x' ]; then
-        log="$(mktemp digest_of.log.XXXX)"
-        trap "rm -f $log;exec 3>&-" RETURN
+        PIPE="$(mktemp -u)"
+        mkfifo "$PIPE"
+        exec 4<>"$PIPE"
+        rm $PIPE
+        trap "exec 4>&-;exec 3>&-" $RETURN
     else
-        trap "exec 3>&-" RETURN
+        trap "exec 3>&-" $RETURN
     fi
-    if ! 2>>"$log" docker inspect "$repo" | >&3 2>>"$log" $jq -r '.[].RepoDigests[]'; then
-        >&2 echo 'Unable to inspect '"$repo"'!'
+
+    rc=0
+    2>>"$log" skopeo \
+        inspect \
+            --raw docker://"$repo" | >&3 2>>"$log" skopeo \
+        manifest-digest /dev/stdin || rc=$?
+    
+    if [ $rc -ne 0 ] ; then
+        >&2 echo 'Unable to inspect '"$repo"' (return  code: '$rc')!'
         >&2 cat "$log"
-        return 16
+        return $rc
     fi
 
     local digest
@@ -45,13 +66,13 @@ trim_slash() {
     local s
     for s in "${@:-}"
     do
-        sed -E 's://*:/:g; s:(^/)?/*$:\1:' <<< "${s}"
+        echo "${s}" | sed -E 's://*:/:g; s:(^/)?/*$:\1:'
     done;
 }
 
-ALPINE_VERSION="${1:-}"
-PYTHON_VERSION="${2:-}"
-ORG="${3:-}"
+ALPINE_VERSION="${1:-${ALPINE_VERSION:-}}"
+PYTHON_VERSION="${2:-${PYTHON_VERSION:-}}"
+ORG="${3:-${ORG:-}}"
 
 if case "$ALPINE_VERSION" in alpine*) true ;; *) false ;; esac ; then
     ALPINE_VERSION="$(echo "$ALPINE_VERSION" | sed 's|alpine||g')"

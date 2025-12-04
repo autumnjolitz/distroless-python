@@ -50,7 +50,10 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v4
-
+      -
+        name: Setup
+        run: |
+          sudo apt-get -y install skopeo
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
