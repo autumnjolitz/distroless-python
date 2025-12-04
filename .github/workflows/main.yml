@@ -189,7 +189,8 @@ jobs:
           echo '${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG }}@'"$IMAGE_BUILDROOT_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           ls ${{ steps.image_env.outputs.IMAGE_HOME }}
 
-      - name: upload build
+      - 
+        name: upload build
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
@@ -199,7 +200,8 @@ jobs:
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar
 
-      - name: upload build info
+      - 
+        name: upload build info
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
@@ -208,61 +210,98 @@ jobs:
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
-  update-dockerhub-desc:
+  upload:
     name: "Upload and update metadata"
     needs: [build_images]
-    runs-on: "ubuntu-latest"
+
+    strategy:
+      fail-fast: true
+      matrix:
+        registry:
+          - docker.io
+          - ghcr.io
+        python:
+          - '3.14'
+          - '3.13'
+          - '3.12'
+          - '3.11'
+          - '3.10'
+          - '3.9'
+          - '3.8'
+        alpine:
+          - '3.20'
+          - '3.21'
+          - '3.22'
+        os:
+          - 'ubuntu-latest'
+        exclude:
+          # No tag
+          - python: '3.8'
+            alpine: '3.21'
+          - python: '3.8'
+            alpine: '3.22'
+          - python: '3.14'
+            alpine: '3.20'
 
     permissions:
       packages: write
 
+    runs-on: ${{ matrix.os }}
     steps:
       -
         name: Checkout
         uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - 
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       -
         name: install dependencies
         run: |
           sudo apt-get -y install skopeo
-          python -m pip install jinplate
-
-
       -
         name: fetch images
         uses: actions/download-artifact@v5
         with:
-          pattern: images-*
-          path: dist-images
+          name: images-alpine${{ matrix.alpine }}-python${{ matrix.python }}
           merge-multiple: true
-
+          path: dist-images/
       -
-        name: prep files
+        name: Rename files
         run: |
-          printf "Images:\n\n" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Images:\n\n' >> "$GITHUB_STEP_SUMMARY"
           for filename in $(find dist-images -type f -name "*.tar" -print)
           do
             image_uri="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
-            for repository in docker.io ghcr.io
-            do
-              new_image_uri=$(echo $image_uri | sed 's|localhost:5000|'"$repository"'|g')
-              new_filename="dist-images/image-$(echo $new_image_uri | base64 -w 0).tar"
-              cp ${filename} ${new_filename}
-              echo '* `'${new_filename}'` (`'${new_image_uri}'`)' >> "$GITHUB_STEP_SUMMARY"
-            done
+            new_image_uri=$(echo $image_uri | sed 's|localhost:5000|${{ matrix.repository }}|g')
+            new_filename="dist-images/image-$(echo $new_image_uri | base64 -w 0).tar"
+            cp ${filename} ${new_filename}
+            printf '* `'${new_filename}'` (`'${new_image_uri}'`)\n' >> "$GITHUB_STEP_SUMMARY"
             rm $filename
           done
+          printf '\n' >> "GITHUB_STEP_SUMMARY"
 
-      - name: login to registry
+      - name: login to dockerhub
+        if: ${{ matrix.repository == 'docker.io' }}
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          printf "${DOCKERHUB_TOKEN}\n" | skopeo \
+            login \
+              --password-stdin \
+              --username ${{ github.repository_owner }} \
+              '${{ matrix.registry }}'
+
+      - name: login to ghcr
+        if: ${{ matrix.repository == 'ghcr.io' }}
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf "${GITHUB_TOKEN}\n" | skopeo login --password-stdin --username ${{ github.repository_owner }} ghcr.io
-          printf "${DOCKERHUB_TOKEN}\n" | skopeo login --password-stdin --username ${{ github.repository_owner }} docker.io
-
+          printf "${GITHUB_TOKEN}\n" | skopeo \
+            login \
+              --password-stdin \
+              --username ${{ github.repository_owner }} \
+              '${{ matrix.registry }}'
       -
         name: upload to registry
         run: |
@@ -340,14 +379,13 @@ jobs:
                 $url)"
             local version_id=$(echo "${versions_json}" | jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
             local package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
-            if ! [ x$output = x -o x$output = x- ]; then
+            if ! [ x$output = x -o x$output = x- -o x$output = x/dev/stdout ]; then
               >>"$output" echo "${image_tag}@${package_url}"
             else
               echo "${image_tag}@${package_url}"
             fi
           }
 
-          printf '#Upload to registry\n\n' >> "$GITHUB_STEP_SUMMARY"
           num_outstanding=0
           concurrency_limit=8
           for filename in $(find dist-images -type f -name "*.tar" -print)
@@ -362,26 +400,12 @@ jobs:
           done
           wait
           echo 'Done uploading'
-
-
-      -
-        name: aggregate metadata
-        run: |
           {
-            printf '### manifest.txt\n\n'
-            printf '```\n'
+            printf '# Uploaded\n\n```'
             cat manifest.txt
-            printf '```\n'
+            print '```\n\n'
           } >>"$GITHUB_STEP_SUMMARY"
-          {
-            printf '### packages.txt\n\n'
-            printf '```\n'
-            cat packages.txt
-            printf '```\n'
-          } >>"$GITHUB_STEP_SUMMARY"
-      -
-        name: parse metadata for README
-        run: |
+
           for filename in $(echo dist-images/image-*.tar)
           do
             IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
@@ -401,37 +425,91 @@ jobs:
               "package_url": "'$PACKAGE_URL'"
             }'
           done | >./values.json jq -s '. | {"images": .}'
-          cat ./values.json
+
+      - 
+        name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          retention-days: 1
+          name: upload-alpine${{ matrix.alpine }}-python${{ matrix.python }}-metadata
+          path: |
+            manifest.txt
+            packages.txt
+            values.json
+
+  post-upload:
+    name: "Post Upload"
+    needs: [upload]
+    runs-on: "ubuntu-latest"
+
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      - 
+        name: "Setup Python"
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      -
+        name: install dependencies
+        run: |
+          python -m pip install jinplate
+      -
+        name: Fetch build metadata
+        uses: actions/download-artifact@v5
+        with:
+          pattern: upload-*-metadata
+          path: dist-images/
+          merge-multiple: false
+      -
+        name: parse metadata for README
+        run: |
+          >./manifest.txt cat $(find ./dist-images -type f -name 'manifest.txt' -print)
+          >./packages.txt cat $(find ./dist-images -type f -name 'packages.txt' -print)
+          {
+            printf '# manifest_file.txt\n\n```'
+            cat ./manifest.txt
+            printf '```\n\n'
+            printf '# packages.txt\n\n```'
+            cat ./packages.txt
+            printf '```\n\n'
+            printf '# values.json\n\n```'
+            cat \
+              $(find ./dist-images -type f -name 'values.json' -print) | \
+                jq -r --slurp '[.[]] | flatten' | tee ./values.json
+            printf '```\n\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          find ./dist-images \
+            -type \( -name manifest.txt -o -name packages.txt -o -name values.json \) \
+            -delete
           >./README.rst python \
             -m jinplate.cli \
-              README.rst.tmpl file://$PWD/values.json
+              docs/README.rst.tmpl file://$PWD/values.json
+          {
+            printf "# README.rst\n\n```"
+            cat README.rst
+            printf "```\n\n"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       -
-        name: Convert README.rst to markdown
+        name: "Convert README.rst to markdown"
         uses: docker://pandoc/core:3.8
         with:
           args: >-
-            -s
             --wrap=none
             -t gfm
             -o README.md
             README.rst
       -
-        name: Print out markdown
+        name: "Print out markdown"
         run: |
-          cat README.md >>"$GITHUB_STEP_SUMMARY"
-
-      - name: upload build info
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          retention-days: 1
-          name: readmes
-          path: |
-            README.rst
-            README.md
-
+          {
+            printf '# README.md\n\n'
+            cat README.md
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       -
-        name: Update repo description
+        name: Update Dockerhub description
         uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae # v4.0.0
         with:
           username: ${{ github.repository_owner }}
