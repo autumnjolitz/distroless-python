@@ -5,31 +5,43 @@ if [ "x$CACHE_ROOT" = 'x' ] || [ "x$BUILD_ROOT" = 'x' ]; then
     exit 1
 fi
 
+DEBUG="${CHROOT_LN_DEBUG:-0}"
+
 set -e
 set -o pipefail
 
 setup () {
-    >&2 echo "Grafting $CACHE_ROOT into $BUILD_ROOT..."
-    tar -C "$CACHE_ROOT" -cpf - . | tar -C "$BUILD_ROOT" -xpf -
+    local extra=
+    if [ "$DEBUG" = '1' ]; then
+        >&2 echo "Grafting $CACHE_ROOT into $BUILD_ROOT..."
+        extra='-v'
+    fi
+    tar -C "$CACHE_ROOT" -cpf - . | eval tar -C "$BUILD_ROOT" $extra -xpf -
     return $?
 }
 
 fini () {
-    >&2 echo "Removing APK data from $BUILD_ROOT, storing in $CACHE_ROOT"
-    tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf -
+    local rc=$?
+    local extra=
+    if [ "$DEBUG" = '1' ]; then
+        >&2 echo "Removing APK data from $BUILD_ROOT, storing in $CACHE_ROOT"
+        extra=-v
+    fi
+    tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | eval tar -C "$CACHE_ROOT" $extra -xpf -
     $_chroot /bin/ln -sf /usr/bin/dash /bin/sh.bak
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk
     if $_chroot /usr/bin/dash -c '[ ! -x /bin/sh ]'; then
         >&2 echo '/bin/sh in chroot failed the vibe check, replacing with a symlink to /usr/bin/dash!'
         mv $BUILD_ROOT/bin/sh.bak $BUILD_ROOT/bin/sh
     else
-        >&2 echo '/bin/sh passed the vibe check'
+        if [ "$DEBUG" = '1' ]; then
+            >&2 echo '/bin/sh passed the vibe check'
+        fi
         rm $BUILD_ROOT/bin/sh.bak
     fi
-    return $?
+    exit $rc
 }
 
 trap fini EXIT
 setup
-set -x
 chroot $BUILD_ROOT /usr/bin/env ln $@

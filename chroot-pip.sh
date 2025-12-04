@@ -5,6 +5,8 @@ if [ "x$CACHE_ROOT" = 'x' ] || [ "x$BUILD_ROOT" = 'x' ]; then
     exit 1
 fi
 
+DEBUG="${CHROOT_PIP_DEBUG:-0}"
+
 set -e
 set -o pipefail
 
@@ -20,27 +22,39 @@ setup () {
 }
 
 fini () {
+    local rc=$?
+    local extra=-q
+    if [ "$DEBUG" = 1 ]; then
+        extra=
+    fi
+
     if [ $PIP_OPTIMIZE = '1' ]; then
         python -m pip freeze >"$AFTER_PACKAGES"
         new_packages="$(diff -Naur "$BEFORE_PACKAGES" "$AFTER_PACKAGES" | grep -vE '^\+\+' | grep -E '^\+' | cut -f2 -d+ | cut -f1 -d= | xargs)"
         if [ "x$new_packages" != 'x' ]; then
-            >&2 echo "Optimizing packages (${new_packages})..."
+            if [ "$DEBUG" = '1' ]; then
+                >&2 echo "Optimizing packages (${new_packages})..."
+            fi
             for package in $new_packages
             do
                 package_location=$(python -m pip show -f "$package" | grep -E '^Location' | cut -f2 -d: | xargs)
                 for dir in $(python -m pip show -f "$package" | awk 'f;/Files:/{f=1}' | cut -f1 -d/ | sort | uniq | xargs)
                 do
-                    python -m compileall -b "$package_location/$dir"
+                    eval python -m compileall \
+                        $extra \
+                        -b "$package_location/$dir"
                 done
             done
         else
-            >&2 echo 'No new packages installed or changed to optimize with.'
+            if [ "$DEBUG" = '1' ]; then
+                >&2 echo 'No new packages installed or changed to optimize with.'
+            fi
         fi
         rm -f "$BEFORE_PACKAGES" "$AFTER_PACKAGES"
     fi
     export ALLOW_SITE_PACKAGES=1
     find $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/site-packages \
-        -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists {}" \; ;
+        -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists $extra {}" \; ;
     return 0
 }
 
@@ -53,9 +67,4 @@ if [ $PIP_OPTIMIZE = '1' ]; then
     AFTER_PACKAGES=$(mktemp)
     python -m pip freeze >"$BEFORE_PACKAGES"
 fi
-set -x
-retval=0
-python -m pip $@ || retval=$?
-set +ex
-
-exit $retval
+python -m pip $@
