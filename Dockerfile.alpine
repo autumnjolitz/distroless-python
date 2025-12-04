@@ -85,7 +85,7 @@ RUN set -eu ; \
         cd /usr/local/lib && \
         tar -C /usr/local/lib -cpf - python$PYTHON_VERSION/lib-dynload libpython*  | tar -C $BUILD_ROOT/usr/local/lib -xpf - ; \
         tar -C /usr/local/bin -cpf - python*  | tar -C $BUILD_ROOT/usr/local/bin -xpf -; \
-        (cd python$PYTHON_VERSION && zip -9 -X $BUILD_ROOT/usr/local/lib/python$(echo $PYTHON_VERSION | tr -d '.').zip $(\
+        (cd python$PYTHON_VERSION && zip -q -9 -X $BUILD_ROOT/usr/local/lib/python$(echo $PYTHON_VERSION | tr -d '.').zip $(\
             find . | grep -vE "(__pycache__|^\./(test|site-packages|lib-dynload|idlelib|lib2to3|tkinter|turtle|ensurepip))" \
         )); \
         cp -p python$PYTHON_VERSION/os.pyc $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/os.pyc ; \
