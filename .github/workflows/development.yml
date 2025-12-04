@@ -77,7 +77,7 @@ jobs:
             '${{ github.repository_owner }}' \
             'localhost:5000'
 
-          docker pull "${SOURCE_IMAGE}" || true
+          docker pull -q "${SOURCE_IMAGE}" || true
           echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
 
           echo ALPINE_VERSION="${ALPINE_VERSION}"| tee -a "$GITHUB_OUTPUT"
@@ -88,7 +88,6 @@ jobs:
           echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo 'EXAMPLE_IMAGE_TAG='"${IMAGE_TAG}-example1" | tee -a "$GITHUB_OUTPUT"
-
           echo REPOSITORY="${REPOSITORY}"| tee -a "$GITHUB_OUTPUT"
           echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")"| tee -a "$GITHUB_OUTPUT"
@@ -192,27 +191,29 @@ jobs:
           test_command: curl -sLv 'http://localhost:8080/'
         run: |
           set -o pipefail
+
+          run_test () {
+            local rv=0
+            local T="$(mktemp)"
+            trap 'rm -f '"$T" RETURN
+            >"$T" 2>&1 eval "$@" || rv=$?
+            printf '`%s` (returned code: ' "$@"
+            printf '%s)\n```\n' "$rv"
+            cat "$T"
+            printf '\n```\n\n'
+            return "$rv"
+          }
+
           rc=0
-          container_id="$(docker run --pull never --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
+          container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
           if [ $rc -ne 0 ]; then
             printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
               -a "$GITHUB_OUTPUT"
             exit $rc
           fi
           trap 'docker stop $container_id' EXIT
-          start_ts=$(date +%s)
-          run_test () {
-            local rc=0
-            local T="$(mktemp)"
-            trap 'rm -f '"$T" RETURN
-            >"$T" 2>&1 eval $test_command || rc=$?
-            printf '`%s` (returned code: ' "$test_command"
-            printf '%s)\n```\n' "$rc"
-            cat "$T"
-            printf '\n```\n\n'
-            return "$rc"
-          }
 
+          start_ts=$(date +%s)
           until [ x$(curl \
             --silent --output /dev/null \
             -w '%{http_code}\n' --fail 'http://localhost:8080/') = x200 ]
@@ -224,7 +225,7 @@ jobs:
             fi
           done
           rc=0
-          (run_test | tee -a "$GITHUB_STEP_SUMMARY) || rc=$?
+          (run_test "$test_command" | tee -a "$GITHUB_STEP_SUMMARY") || rc=$?
           if [ $rc -ne 0 ]; then
             exit $rc
           fi
