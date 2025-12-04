@@ -330,7 +330,6 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
                 $url)"
-            >&2 echo 'versions json from ('"$url"') is: '"${versions_json}"
             local version_id=$(echo "${versions_json}" | jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
             local package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
             if ! [ x$output = x -o x$output = x- ]; then
