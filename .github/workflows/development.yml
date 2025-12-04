@@ -167,6 +167,7 @@ jobs:
 
       -
         name: examples/simple-flask
+        id: build_test
         uses: docker/build-push-action@v6
         env:
           DOCKER_BUILD_SUMMARY: false
@@ -189,6 +190,7 @@ jobs:
         name: Test Example
         env:
           IMAGE_URI: '${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}'
+          IMAGE_DIGEST: '${{ steps.build_test.outputs.digest }}'
           test_command: curl -sLv 'http://localhost:8080/'
         run: |
           set -o pipefail
@@ -207,12 +209,16 @@ jobs:
             printf '%s)\n```\n' "$rv"
             cat "$T"
             printf '\n```\n\n### images\n\n```'
-            docker images --tree $IMAGE_URI
+            docker images --tree $IMAGE_URI | cat
             printf '\n```\n'
             return "$rv"
           }
 
           rc=0
+          for platform in $(echo $TARGET_PLATFORMS | tr , '\n')
+          do
+            docker pull --platform $platform -q "$IMAGE_URI"
+          done
           docker pull -q "$IMAGE_URI"
           container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
           if [ $rc -ne 0 ]; then
