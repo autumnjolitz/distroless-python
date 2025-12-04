@@ -186,6 +186,7 @@ jobs:
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
       - 
         id: test
+        name: Test Example
         env:
           IMAGE_URI: '${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}'
           test_command: curl -sLv 'http://localhost:8080/'
@@ -193,6 +194,7 @@ jobs:
           set -o pipefail
 
           run_test () {
+            printf '## Test\n\n'
             local rv=0
             local T="$(mktemp)"
             trap 'rm -f '"$T" RETURN
@@ -200,11 +202,14 @@ jobs:
             printf '`%s` (returned code: ' "$@"
             printf '%s)\n```\n' "$rv"
             cat "$T"
-            printf '\n```\n\n'
+            printf '\n```\n\n### images\n\n```'
+            docker images --tree $IMAGE_URI
+            printf '\n```\n'
             return "$rv"
           }
 
           rc=0
+          docker pull -q "$IMAGE_URI"
           container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
           if [ $rc -ne 0 ]; then
             printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
