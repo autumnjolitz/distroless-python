@@ -14,7 +14,8 @@ env:
   TARGET_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
-  docker:
+  build_images:
+    name: "Create runtime and buildroot OCI Images"
     services:
       registry:
         image: registry:3
@@ -197,7 +198,8 @@ jobs:
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
   update-dockerhub-desc:
-    needs: [docker]
+    name: "Upload and update metadata"
+    needs: [build_images]
     runs-on: "ubuntu-latest"
 
     permissions:
@@ -257,8 +259,9 @@ jobs:
           for filename in $(find dist-images -type f -name "*.tar" -print)
           do
             IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
-            echo "uploading $IMAGE_URI"
             {
+              START_TIME=$(date +%s)
+              echo "uploading $IMAGE_URI"
               T="$(mktemp)"
               skopeo copy \
                 --quiet \
@@ -271,8 +274,9 @@ jobs:
               IMAGE_DIGEST="$(cat $T)"
               rm -f $T
               echo "${IMAGE_URI}@${IMAGE_DIGEST}" | tee -a ./manifest.txt
-              printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >> "$GITHUB_STEP_SUMMARY"
-            } & ;
+              printf '* '"${IMAGE_URI}@${IMAGE_DIGEST}"'\n' >>"$GITHUB_STEP_SUMMARY"
+              echo "uploaded $IMAGE_URI in $(expr $(date +%s) - $START_TIME) seconds"
+            } &
           done
           wait
 

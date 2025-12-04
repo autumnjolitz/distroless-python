@@ -12,7 +12,8 @@ env:
   TARGET_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
-  docker:
+  build_images:
+    name: "Create runtime and buildroot OCI Images"
     services:
       registry:
         image: registry:3
@@ -194,7 +195,8 @@ jobs:
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
   render-dockerhub-desc:
-    needs: [docker]
+    name: "Render metadata"
+    needs: [build_images]
     runs-on: "ubuntu-latest"
     steps:
       -
