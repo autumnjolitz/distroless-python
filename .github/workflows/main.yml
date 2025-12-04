@@ -324,9 +324,10 @@ jobs:
             local package_name=$(echo "${image_tag}" | rev | cut -d: -f2- | cut -d/ -f1 | rev)
             local repo_name='${{ github.repository }}'
             local owner='${{ github.repository_owner }}'
-            local version_id=$(curl -s -H "Authorization: Bearer "'${{ secrets.GITHUB_TOKEN }}' \
-                "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions" | \
-                jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
+            local versions_json="$(curl -s -H 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+                "https://api.github.com/orgs/${owner}/packages/container/${package_name}/versions")"
+            >&2 echo 'versions json is: '"${versions_json}"
+            local version_id=$(echo "${versions_json}" | jq -r --arg tag "$tag" '.[] | select(.metadata.container.tags[] == $tag) | .id')
             local package_url="https://github.com/${repo_name}/pkgs/container/${package_name}/${version_id}?tag=${tag}"
             if ! [ x$output = x -o x$output = x- ]; then
               >>"$output" echo "${image_tag}@${package_url}"
