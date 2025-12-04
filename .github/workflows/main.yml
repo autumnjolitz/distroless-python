@@ -337,7 +337,7 @@ jobs:
 
           printf '#Upload to registry\n\n' >> "$GITHUB_STEP_SUMMARY"
           num_outstanding=0
-          concurrency_limit=4
+          concurrency_limit=8
           for filename in $(find dist-images -type f -name "*.tar" -print)
           do
             IMAGE_URI="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
