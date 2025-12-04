@@ -176,6 +176,10 @@ jobs:
               SOURCE_IMAGE=${{ steps.image_env.outputs.IMAGE_TAG }}
           tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-example1-amd64"
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
+      - 
+        id: test
+        run: |
+
       -
         id: post_build
         run: |
@@ -186,7 +190,9 @@ jobs:
           echo '${{ steps.image_env.outputs.IMAGE_TAG }}@'"$IMAGE_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           echo '${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG }}@'"$IMAGE_BUILDROOT_DIGEST" | tee -a ${{ steps.image_env.outputs.IMAGE_HOME }}/manifest.txt
           ls ${{ steps.image_env.outputs.IMAGE_HOME }}
-      - name: upload build
+
+      - 
+        name: upload build
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
@@ -196,7 +202,8 @@ jobs:
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
             ${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar
 
-      - name: upload build info
+      - 
+        name: upload build info
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
@@ -205,7 +212,8 @@ jobs:
           path: |
             ${{ steps.image_env.outputs.IMAGE_HOME }}/*.txt
 
-  render-dockerhub-desc:
+
+  post-build:
     name: "Render metadata"
     needs: [build_images]
     runs-on: "ubuntu-latest"
@@ -277,7 +285,7 @@ jobs:
           cat ./values.json
           >./README.rst python \
             -m jinplate.cli \
-              README.rst.tmpl file://$PWD/values.json
+              docs/README.rst.tmpl file://$PWD/values.json
       -
         name: Convert README.rst to markdown
         uses: docker://pandoc/core:3.8
