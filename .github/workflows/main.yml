@@ -412,6 +412,17 @@ jobs:
         name: Print out markdown
         run: |
           cat README.md >>"$GITHUB_STEP_SUMMARY"
+
+      - name: upload build info
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          retention-days: 1
+          name: readmes
+          path: |
+            README.rst
+            README.md
+
       - 
         name: Update repo description
         uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae # v4.0.0
