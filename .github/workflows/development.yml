@@ -48,6 +48,7 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
+        id: setup
         name: Setup
         run: |
           setup_registry () {
@@ -55,7 +56,7 @@ jobs:
               -p5000:5000 \
               --name registry \
               --rm -d registry:3)
-            echo 'Started registry at '$registry_id
+            echo 'REGISTRY_CONTAINER_ID='$registry_id
           }
           setup_containerd_snapshotter () {
             local _sudo=sudo
@@ -80,7 +81,7 @@ jobs:
           sudo apt-get -y install skopeo
           setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
           printf '## Registry info:\n\n' | tee -a "$GITHUB_STEP_SUMMARY"
-          setup_registry | tee -a "$GITHUB_STEP_SUMMARY"
+          setup_registry | tee -a "$GITHUB_OUTPUT"
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -237,7 +238,7 @@ jobs:
           }
 
           rc=0
-          REMOTE_DIGEST="$(skopeo inspect --raw "$IMAGE_URI" | skopeo manifest-digest /dev/stdin)"
+          REMOTE_DIGEST="$(skopeo inspect --tls-verify=false --raw docker://"$IMAGE_URI" | skopeo manifest-digest /dev/stdin)"
           if [ "$REMOTE_DIGEST" != "${IMAGE_DIGEST}" ]; then
             echo 'generated a diferent manifest than '"${IMAGE_DIGEST}"': '"$REMOTE_DIGEST"
             exit 2
@@ -276,6 +277,8 @@ jobs:
       -
         id: post_build
         run: |
+          docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
+
           IMAGE_DIGEST='${{steps.runtime.outputs.digest}}'
           IMAGE_BUILDROOT_DIGEST='${{steps.buildroot.outputs.digest}}'
           echo 'IMAGE_DIGEST='$IMAGE_DIGEST >> "GITHUB_OUTPUT"
