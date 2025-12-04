@@ -80,17 +80,19 @@ jobs:
           docker pull "${SOURCE_IMAGE}" || true
           echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
 
-          echo ALPINE_VERSION="${ALPINE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo PYTHON_VERSION="${PYTHON_VERSION}" >> "$GITHUB_OUTPUT"
-          echo SOURCE_IMAGE="${SOURCE_IMAGE}" >> "$GITHUB_OUTPUT"
-          echo IMAGE_TAG="${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot" >> "$GITHUB_OUTPUT"
-          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo REPOSITORY="${REPOSITORY}" >> "$GITHUB_OUTPUT"
-          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" >> "$GITHUB_OUTPUT"
-          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  >> "$GITHUB_OUTPUT"
+          echo ALPINE_VERSION="${ALPINE_VERSION}"| tee -a "$GITHUB_OUTPUT"
+          echo PYTHON_VERSION="${PYTHON_VERSION}"| tee -a "$GITHUB_OUTPUT"
+          echo SOURCE_IMAGE="${SOURCE_IMAGE}"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG="${IMAGE_TAG}"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo 'EXAMPLE_IMAGE_TAG='"${IMAGE_TAG}-example1" | tee -a "$GITHUB_OUTPUT"
+
+          echo REPOSITORY="${REPOSITORY}"| tee -a "$GITHUB_OUTPUT"
+          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")"| tee -a "$GITHUB_OUTPUT"
+          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.' | tee -a "$GITHUB_OUTPUT"
 
       -
         name: Create Buildroot
@@ -171,6 +173,7 @@ jobs:
           DOCKER_BUILD_SUMMARY: false
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
+          push: true
           context: "examples/simple-flask"
           platforms: ${{ env.TARGET_PLATFORMS }}
           cache-from: |
@@ -185,13 +188,12 @@ jobs:
       - 
         id: test
         env:
-          IMAGE_URI: '${{ steps.image_env.outputs.IMAGE_TAG }}-example1'
-          IMAGE_ARCHIVE: '${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar'
+          IMAGE_URI: '${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}'
+          test_command: curl -sLv 'http://localhost:8080/'
         run: |
           set -o pipefail
-          docker image load -i "$IMAGE_ARCHIVE"
           rc=0
-          container_id="$(docker run --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
+          container_id="$(docker run --pull never --detach -p 8080:8080 --rm $IMAGE_URI)" || rc=$?
           if [ $rc -ne 0 ]; then
             printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
               -a "$GITHUB_OUTPUT"
@@ -199,8 +201,6 @@ jobs:
           fi
           trap 'docker stop $container_id' EXIT
           start_ts=$(date +%s)
-          test_command="curl -sLv 'http://localhost:8080/'"
-
           run_test () {
             local rc=0
             local T="$(mktemp)"
