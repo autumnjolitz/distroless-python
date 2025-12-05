@@ -27,6 +27,7 @@ fini () {
     if [ "$DEBUG" = 1 ]; then
         extra=
     fi
+    set -x
 
     if [ $PIP_OPTIMIZE = '1' ]; then
         python -m pip freeze >"$AFTER_PACKAGES"
