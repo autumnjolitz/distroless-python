@@ -31,6 +31,7 @@ jobs:
           - '3.20'
           - '3.21'
           - '3.22'
+          - '3.23'
         os:
           - 'ubuntu-latest'
         exclude:
@@ -39,7 +40,15 @@ jobs:
             alpine: '3.21'
           - python: '3.8'
             alpine: '3.22'
+          - python: '3.8'
+            alpine: '3.23'
+
+          - python: '3.9'
+            alpine: '3.23'
+
           - python: '3.14'
+            alpine: '3.20'
+          - python: '3.15'
             alpine: '3.20'
 
     runs-on: ${{ matrix.os }}
