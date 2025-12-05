@@ -80,8 +80,11 @@ jobs:
 
           sudo apt-get -y install skopeo
           setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
-          printf '## Registry info:\n\n' | tee -a "$GITHUB_STEP_SUMMARY"
-          setup_registry | tee -a "$GITHUB_OUTPUT"
+          {
+            printf '## Registry info:\n\n'
+            setup_registry
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -401,7 +404,6 @@ jobs:
         uses: docker://pandoc/core:3.8
         with:
           args: >-
-            -s
             --wrap=none
             -t gfm
             -o README.md
@@ -410,3 +412,6 @@ jobs:
         name: Print out markdown
         run: |
           cat README.md >>"$GITHUB_STEP_SUMMARY"
+          printf '\n\n# README.rst\n\n```\n' >> "$GITHUB_STEP_SUMMARY"
+          cat README.rst >> "$GITHUB_STEP_SUMMARY"
+          printf '\n```\n' >> "$GITHUB_STEP_SUMMARY"
