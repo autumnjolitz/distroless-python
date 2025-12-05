@@ -22,16 +22,18 @@ setup () {
 }
 
 fini () {
+    local rv=
     local rc=$?
     local extra=-q
+    local new_packages=
     if [ "$DEBUG" = 1 ]; then
         extra=
     fi
-    set -x
 
     if [ $PIP_OPTIMIZE = '1' ]; then
         python -m pip freeze >"$AFTER_PACKAGES"
-        new_packages="$(diff -Naur "$BEFORE_PACKAGES" "$AFTER_PACKAGES" | grep -vE '^\+\+' | grep -E '^\+' | cut -f2 -d+ | cut -f1 -d= | xargs)"
+        rv=0
+        new_packages="$(diff -Naur "$BEFORE_PACKAGES" "$AFTER_PACKAGES" | grep -vE '^\+\+' | grep -E '^\+' | cut -f2 -d+ | cut -f1 -d= | xargs)" || rv=$?
         if [ "x$new_packages" != 'x' ]; then
             if [ "$DEBUG" = '1' ]; then
                 >&2 echo "Optimizing packages (${new_packages})..."
@@ -63,9 +65,41 @@ trap fini EXIT
 setup
 export PYTHONPATH="${BUILD_ROOT}/usr/local/lib/python${PYTHON_VERSION}/site-packages"
 export PIP_PREFIX="${BUILD_ROOT}/usr/local"
+
+case "$1" in
+    optimize)
+    PIP_OPTIMIZE='1'
+    ;;
+esac
+
 if [ $PIP_OPTIMIZE = '1' ]; then
     BEFORE_PACKAGES=$(mktemp)
     AFTER_PACKAGES=$(mktemp)
     python -m pip freeze >"$BEFORE_PACKAGES"
 fi
+
+case "$@" in
+    *'--force-reinstall'*|optimize*)
+    for package_name in $@
+    do
+        if case "$package_name" in '-'*) false ;; *) true ;; esac ; then
+            if >/dev/null pip show "${package_name}"; then
+                sed -i'' '/^'"${package_name}"'==/d' $BEFORE_PACKAGES
+            fi
+        fi
+    done
+    ;;
+esac
+
+if [ $1 = optimize ]; then
+    shift
+    if [ x"$@" = x ]; then
+        >&2 echo 'optimize [PACKAGE] [PACKAGE2] ... [PACKAGEN]
+pass in package names to run optimize on
+'
+        exit 1
+    fi
+    exit
+fi
+
 python -m pip $@
