@@ -92,10 +92,7 @@ Given the following ``Dockerfile``, we will add ``httpie`` to the image and refe
 
     #syntax=docker/dockerfile:1
     FROM autumnjolitz/distroless-python:3.12-alpine3.20-buildroot AS buildroot
-    RUN python -m pip install \
-            --no-cache \
-            --prefix "$BUILD_ROOT/usr/local" \
-            httpie
+    RUN chroot-pip install httpie
 
     FROM autumnjolitz/distroless-python:3.12-alpine3.20
     COPY --from=buildroot \
