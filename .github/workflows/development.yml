@@ -65,9 +65,9 @@ jobs:
             fi
             if ! [ -f /etc/docker/daemon.json ]; then
               eval $_sudo mkdir -p /etc/docker
-              echo '{}' | $_sudo tee /etc/docker/daemon.json
+              echo '{}' | >/dev/null $_sudo tee /etc/docker/daemon.json
             fi
-            cat /etc/docker/daemon.json | jq '. | .+{"features": {"containerd-snapshotter": true}}' | eval $_sudo tee /etc/docker/daemon.json
+            cat /etc/docker/daemon.json | jq '. | .+{"features": {"containerd-snapshotter": true}}' | >/dev/null eval $_sudo tee /etc/docker/daemon.json
             printf '# Docker config\n\n```\n'
             cat /etc/docker/daemon.json
             printf '\n```\n\n'
