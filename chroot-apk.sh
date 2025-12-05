@@ -27,6 +27,19 @@ fini () {
         >&2 echo "Removing APK data from $BUILD_ROOT, storing in $CACHE_ROOT"
         extra='-v'
     fi
+    local T="$(mktemp -d)"
+    if [ -f $BUILD_ROOT/lib/apk/db/scripts.tar.gz ]; then
+        tar -C "$T" -xzpf $BUILD_ROOT/lib/apk/db/scripts.tar.gz
+        rm -f $BUILD_ROOT/lib/apk/db/scripts.tar.gz
+        sed -i'' 's|^#!busybox sh|#!/usr/bin/dash|g' $(find "$T" -type f -print)
+        sed -i'' 's|^#!/bin/sh|#!/usr/bin/dash|g' $(find "$T" -type f -print)
+        sed -i'' 's|^#!/bin/busybox sh|#!/usr/bin/dash|g' $(find "$T" -type f -print)
+        cat $(find "$T" -type f -print)
+        tar -C "$T" -cpvzf $BUILD_ROOT/lib/apk/db/scripts.tar.gz  .
+        rm -rf "$T"
+    fi
+
+    mkdir -p $BUILD_ROOT/var/cache/apk
     tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | eval tar -C "$CACHE_ROOT" -xpf $extra -
     $_chroot /bin/ln -sf /usr/bin/dash /bin/sh.bak
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk

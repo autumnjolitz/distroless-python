@@ -27,6 +27,7 @@ fini () {
         >&2 echo "Removing APK data from $BUILD_ROOT, storing in $CACHE_ROOT"
         extra=-v
     fi
+    mkdir -p $BUILD_ROOT/var/cache/apk
     tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | eval tar -C "$CACHE_ROOT" $extra -xpf -
     $_chroot /bin/ln -sf /usr/bin/dash /bin/sh.bak
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk
