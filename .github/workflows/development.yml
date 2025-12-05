@@ -82,7 +82,7 @@ jobs:
           setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
           {
             printf '## Registry info:\n\n'
-            setup_registry
+            setup_registry | tee -a "$GITHUB_OUTPUT"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       -
