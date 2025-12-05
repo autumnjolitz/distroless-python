@@ -62,9 +62,11 @@ RUN \
         alpine-release \
         musl \
         libffi \
+        coreutils-env \
+        ; \
+    $_apk_add --no-scripts \
         dash \
         dash-binsh \
-        coreutils-env \
         ; \
     $_apk_add \
         ca-certificates \

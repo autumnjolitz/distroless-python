@@ -61,6 +61,7 @@ jobs:
         name: Setup
         run: |
           setup_registry () {
+            >/dev/null docker pull -q docker.io/library/registry:3
             registry_id=$(docker run \
               -p5000:5000 \
               --name registry \
