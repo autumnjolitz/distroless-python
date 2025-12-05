@@ -40,7 +40,7 @@ RUN set -eu ; \
     # remove all ``__pycache__`` directories
     find /usr/local/lib/python$PYTHON_VERSION -type d -name '__pycache__' -print0 | xargs -0 rm -rf ; \
     # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
-    python -m compileall -b /usr/local/lib/python$PYTHON_VERSION ; \
+    python -m compileall -q -b /usr/local/lib/python$PYTHON_VERSION ; \
     find -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists -q {}" \; ;\
     # make the new root:
     mkdir -p \
