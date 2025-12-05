@@ -25,7 +25,9 @@ ADD --chmod=0755 chroot-pip.sh /usr/local/bin/chroot-pip
 ADD --chmod=0755 chroot-ln.sh /usr/local/bin/chroot-ln
 ADD --chmod=0755 remove-py-if-pyc-exists.sh /usr/local/bin/remove-py-if-pyc-exists
 ADD --chmod=0755 chroot-exec.sh /usr/local/bin/chroot-exec
-RUN set -eu ; \
+RUN \
+    --mount=type=cache,id=pip-cache-${TARGETARCH}${TARGETVARIANT},sharing=shared,target=/root/.cache/pip \
+    set -eu ; \
     python -m pip install -U pip setuptools ; \
     # Add to buildroot:
     $_sys_apk_add \
