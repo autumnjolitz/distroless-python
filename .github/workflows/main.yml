@@ -16,11 +16,6 @@ env:
 jobs:
   build_images:
     name: "Create runtime and buildroot OCI Images"
-    services:
-      registry:
-        image: registry:3
-        ports:
-          - 5000:5000
     strategy:
       fail-fast: true
       matrix:
@@ -53,9 +48,42 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
+        id: setup
         name: Setup
         run: |
+          setup_registry () {
+            registry_id=$(docker run \
+              -p5000:5000 \
+              --name registry \
+              --rm -d registry:3)
+            echo 'REGISTRY_CONTAINER_ID='$registry_id
+          }
+          setup_containerd_snapshotter () {
+            local _sudo=sudo
+            if [ $(id -u) -eq 0 ]; then
+              _sudo=sudo
+            fi
+            if ! [ -f /etc/docker/daemon.json ]; then
+              eval $_sudo mkdir -p /etc/docker
+              echo '{}' | >/dev/null $_sudo tee /etc/docker/daemon.json
+            fi
+            cat /etc/docker/daemon.json | jq '. | .+{"features": {"containerd-snapshotter": true}}' | >/dev/null eval $_sudo tee /etc/docker/daemon.json
+            printf '# Docker config\n\n```\n'
+            cat /etc/docker/daemon.json
+            printf '\n```\n\n'
+            eval $_sudo systemctl restart docker
+            sleep 1
+            printf '# Docker Info\n\n```'
+            docker info
+            printf '\n```\n'
+          }
+
           sudo apt-get -y install skopeo
+          setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            printf '## Registry info:\n\n'
+            setup_registry | tee -a "$GITHUB_OUTPUT"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -64,12 +92,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: network=host
-          daemon-config: |
-            {
-              "features": {
-                "containerd-snapshotter": true
-              }
-            }
 
       -
         id: image_env
@@ -80,20 +102,19 @@ jobs:
             '${{ github.repository_owner }}' \
             'localhost:5000'
 
-          docker pull "${SOURCE_IMAGE}" || true
-          echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
-
-          echo ALPINE_VERSION="${ALPINE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo PYTHON_VERSION="${PYTHON_VERSION}" >> "$GITHUB_OUTPUT"
-          echo SOURCE_IMAGE="${SOURCE_IMAGE}" >> "$GITHUB_OUTPUT"
-          echo IMAGE_TAG="${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot" >> "$GITHUB_OUTPUT"
-          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo REPOSITORY="${REPOSITORY}" >> "$GITHUB_OUTPUT"
-          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )" >> "$GITHUB_OUTPUT"
-          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" >> "$GITHUB_OUTPUT"
-          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  >> "$GITHUB_OUTPUT"
+          docker pull -q "${SOURCE_IMAGE}" || true
+          echo "IMAGE_HOME=$(mktemp -d)" | tee -a "$GITHUB_OUTPUT"
+          echo ALPINE_VERSION="${ALPINE_VERSION}" | tee -a "$GITHUB_OUTPUT"
+          echo PYTHON_VERSION="${PYTHON_VERSION}" | tee -a "$GITHUB_OUTPUT"
+          echo SOURCE_IMAGE="${SOURCE_IMAGE}" | tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG="${IMAGE_TAG}" | tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot" | tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
+          echo REPOSITORY="${REPOSITORY}" | tee -a "$GITHUB_OUTPUT"
+          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
+          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" | tee -a "$GITHUB_OUTPUT"
+          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  | tee -a "$GITHUB_OUTPUT"
 
       -
         name: Create Buildroot
@@ -185,9 +206,90 @@ jobs:
               SOURCE_IMAGE=${{ steps.image_env.outputs.IMAGE_TAG }}
           tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-example1-amd64"
           outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
+      - 
+        id: test
+        name: Test Example
+        env:
+          IMAGE_URI: '${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}'
+          IMAGE_DIGEST: '${{ steps.build_test.outputs.digest }}'
+          test_command: curl -sLv 'http://localhost:8080/'
+        run: |
+          set -o pipefail
+
+          run_test () {
+            local rv=0
+            local T="$(mktemp)"
+            trap 'rm -f '"$T" RETURN
+            >"$T" 2>&1 eval "$@" || rv=$?
+            if [ $rv -eq 0 ] && case "$(tail -1 $T)" in '<p>Hello, World!</p>') false ;; *) true ;; esac ; then
+              >&2 echo 'failed! got "'"$(tail -1 $T)"'" !'
+              rv=1
+            fi
+            printf '`%s` (returned code: ' "$@"
+            printf '%s)\n```\n' "$rv"
+            cat "$T"
+            printf '\n```\n\n'
+            return "$rv"
+          }
+
+          rc=0
+          REMOTE_DIGEST="$(skopeo inspect --tls-verify=false --raw docker://"$IMAGE_URI" | skopeo manifest-digest /dev/stdin)"
+          if [ "$REMOTE_DIGEST" != "${IMAGE_DIGEST}" ]; then
+            echo 'generated a diferent manifest than '"${IMAGE_DIGEST}"': '"$REMOTE_DIGEST"
+            exit 2
+          fi
+          docker pull -q "$(echo "$IMAGE_URI" | rev | cut -d: -f2- | rev )@${IMAGE_DIGEST}"
+          for platform in $(echo $TARGET_PLATFORMS | tr , '\n')
+          do
+            docker pull --platform $platform -q "$IMAGE_URI"
+            >&2 printf 'pulled %s (%s)\n' "$IMAGE_TAG" "$platform"
+          done
+          {
+            printf '## images\n\n```'
+            docker images --tree $IMAGE_URI | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"
+            printf '\n```\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+          for platform in $(echo $TARGET_PLATFORMS | tr , '\n')
+          do
+            rc=0
+            container_id="$(docker run \
+              --platform $platform \
+              --detach -p 8080:8080 \
+              --rm $IMAGE_URI)" || rc=$?
+            trap 'docker stop $container_id' EXIT
+            if [ $rc -ne 0 ]; then
+              printf 'docker run failed (return code '$rc')!\n' | >&2 tee \
+                -a "$GITHUB_OUTPUT"
+              exit $rc
+            fi
+            start_ts=$(date +%s)
+            until [ x$(curl \
+              --silent --output /dev/null \
+              -w '%{http_code}\n' --fail 'http://localhost:8080/_health') = x200 ]
+            do
+              sleep 1
+              if [ "$(expr "${start_ts}" \+ 30)" -lt "$(date +%s)" ]; then
+                >&2 echo 'failed to get a good response in 30 seconds!'
+                break
+              fi
+            done
+   
+            rc=0
+            printf '## Test (%s)\n\n' "$(curl 'http://localhost:8080/_arch')" | tee -a "$GITHUB_STEP_SUMMARY"
+            (run_test "$test_command" | tee -a "$GITHUB_STEP_SUMMARY") || rc=$?
+            if [ $rc -ne 0 ]; then
+              exit $rc
+            fi
+            trap -- EXIT
+            docker stop $container_id
+          done
+
       -
         id: post_build
         run: |
+          docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
+
           IMAGE_DIGEST='${{steps.runtime.outputs.digest}}'
           IMAGE_BUILDROOT_DIGEST='${{steps.buildroot.outputs.digest}}'
           echo 'IMAGE_DIGEST='$IMAGE_DIGEST >> "GITHUB_OUTPUT"
@@ -509,12 +611,12 @@ jobs:
             -o README.md
             README.rst
       -
-        name: "Print out markdown"
+        name: Print out markdown
         run: |
-          {
-            printf '# README.md\n\n'
-            cat README.md
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          cat README.md >>"$GITHUB_STEP_SUMMARY"
+          printf '\n\n# README.rst\n\n```\n' >> "$GITHUB_STEP_SUMMARY"
+          cat README.rst >> "$GITHUB_STEP_SUMMARY"
+          printf '\n```\n' >> "$GITHUB_STEP_SUMMARY"
       -
         name: Update Dockerhub description
         uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae # v4.0.0
