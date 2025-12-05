@@ -1,4 +1,5 @@
-#syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.20-labs
+
 
 ARG ALPINE_VERSION=3.20
 ARG PYTHON_VERSION=3.12
@@ -19,7 +20,7 @@ ENV BUILD_ROOT=$BUILD_ROOT \
     _apk_add="/usr/bin/env apk add --root $BUILD_ROOT --no-cache" \
     _apk_del="/usr/bin/env apk del --root $BUILD_ROOT --purge" \
     _sh="chroot $BUILD_ROOT sh" \
-    _ln="chroot $BUILD_ROOT ln" \
+    _ln="chroot $BUILD_ROOT /bin/ln" \
     _chroot="chroot $BUILD_ROOT"
 
 ADD --chmod=0755 chroot-apk.sh /usr/local/bin/chroot-apk
@@ -28,10 +29,7 @@ ADD --chmod=0755 chroot-ln.sh /usr/local/bin/chroot-ln
 ADD --chmod=0755 remove-py-if-pyc-exists.sh /usr/local/bin/remove-py-if-pyc-exists
 ADD --chmod=0755 chroot-exec.sh /usr/local/bin/chroot-exec
 RUN \
-    --mount=type=cache,id=pip-cache-${TARGETARCH}${TARGETVARIANT},sharing=shared,target=/root/.cache/pip \
     set -eu ; \
-    python -m pip install -U pip setuptools ; \
-    # Add to buildroot:
     $_sys_apk_add \
         dash \
         # TLS certs
@@ -41,11 +39,6 @@ RUN \
         # be imported from. This makes the stdlib immutable.
         zip \
     ; \
-    # remove all ``__pycache__`` directories
-    find /usr/local/lib/python$PYTHON_VERSION -type d -name '__pycache__' -print0 | xargs -0 rm -rf ; \
-    # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
-    python -m compileall -q -b /usr/local/lib/python$PYTHON_VERSION ; \
-    find -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists -q {}" \; ;\
     # make the new root:
     mkdir -p \
         $CACHE_ROOT/ \
@@ -53,7 +46,9 @@ RUN \
         $BUILD_ROOT/bin \
         $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/site-packages \
         $BUILD_ROOT/usr/local/bin \
+        $BUILD_ROOT/proc \
     ; \
+    cp -R /dev $BUILD_ROOT/dev ; \
     # copy the apk related confs
     cp -R /etc/apk $BUILD_ROOT/etc/apk ; \
     $_apk_add --initdb ; \
@@ -62,22 +57,46 @@ RUN \
         alpine-release \
         musl \
         libffi \
-        coreutils-env \
-        ; \
-    $_apk_add --no-scripts \
-        dash \
-        dash-binsh \
-        ; \
-    $_apk_add \
-        ca-certificates \
-        # needed for update-ca-certificates to work:
-        run-parts \
-        # install the runtime dependencies for python
-        $(apk info -R .python-rundeps | grep -vE ':$') \
         ; \
     cp -p /bin/busybox $BUILD_ROOT/bin/busybox ; \
-    ls -lt $BUILD_ROOT/bin/busybox ; \
-    chroot $BUILD_ROOT /bin/busybox ln -sf /bin/busybox /bin/ln ; \
+    chroot $BUILD_ROOT /bin/busybox busybox ln -sf /bin/busybox /bin/ln
+
+RUN --security=insecure \
+    set -eu ; \
+    mount --bind /proc /$BUILD_ROOT/proc ; \
+    $_apk_add \
+        busybox \
+        dash \
+        dash-binsh \
+    ; \
+    T=$(mktemp -d) ; \
+    if [ -f $BUILD_ROOT/lib/apk/db/scripts.tar.gz ]; then \
+        tar -C "$T" -xzpf $BUILD_ROOT/lib/apk/db/scripts.tar.gz ; \
+        rm -f $BUILD_ROOT/lib/apk/db/scripts.tar.gz ; \
+        find "$T" -name 'busybox-*' -delete ; \
+        tar -C "$T" -cpvzf $BUILD_ROOT/lib/apk/db/scripts.tar.gz  . ; \
+        rm -rf "$T" ; \
+    fi ;  \
+    tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf - ; \
+    rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk && \
+    chroot-apk add \
+        ca-certificates \
+        # needed for update-ca-certificates to work:
+        run-parts
+
+RUN \
+    --mount=type=cache,id=pip-cache-${TARGETARCH}${TARGETVARIANT},sharing=shared,target=/root/.cache/pip \
+    set -eu ; \
+    chroot-apk add \
+        coreutils-env \
+        $(apk info -R .python-rundeps | grep -vE ':$') \
+        ; \
+    python -m pip install -U pip setuptools ; \
+    # remove all ``__pycache__`` directories
+    find /usr/local/lib/python$PYTHON_VERSION -type d -name '__pycache__' -print0 | xargs -0 rm -rf ; \
+    # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
+    python -m compileall -q -b /usr/local/lib/python$PYTHON_VERSION ; \
+    find -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists -q {}" \; ;\
     # copy dash into the container so we can use it as the default bin/sh
     # tar -C / -cpf - $(\
     #     apk info -L \
@@ -98,10 +117,8 @@ RUN \
         touch $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/ensurepip.py ; \
         rm $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/lib-dynload/_tkinter* ; \
     ) && \
-    $_ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python3 && \
-    $_ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python && \
-    tar -C "$BUILD_ROOT" -cpf - etc/apk bin/ln bin/busybox var/cache/apk usr/share/apk | tar -C "$CACHE_ROOT" -xpf - ; \
-    rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk && \
+    chroot-ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python3 && \
+    chroot-ln -sf /usr/local/bin/python$PYTHON_VERSION /usr/local/bin/python && \
     # regenerate the ca-certs!
     chroot-exec update-ca-certificates && \
     chroot-pip --optimize install --force-reinstall setuptools
@@ -115,6 +132,7 @@ ARG BUILD_ROOT='/dest'
 ENV BUILD_ROOT=$BUILD_ROOT \
     PYTHON_VERSION=$PYTHON_VERSION \
     ALPINE_VERSION=$ALPINE_VERSION
+COPY --from=buildroot /dev /dev
 COPY --from=buildroot $BUILD_ROOT /
 LABEL \
     org.opencontainers.image.authors="distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>" \

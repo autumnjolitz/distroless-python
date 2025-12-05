@@ -104,6 +104,8 @@ jobs:
         with:
           platforms: ${{ env.TARGET_PLATFORMS }}
           driver-opts: network=host
+          buildkitd-flags: '--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host'
+
       -
         id: image_env
         run: |
@@ -137,6 +139,7 @@ jobs:
           DOCKER_BUILD_SUMMARY: false
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
+          allow: network.host,security.insecure  # this is for the bind mount
           push: true
           platforms: ${{ env.TARGET_PLATFORMS }}
           context: "."
@@ -168,6 +171,7 @@ jobs:
           DOCKER_BUILD_SUMMARY: false
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
+          allow: network.host,security.insecure  # due to using a file that has a sec contxt
           push: true
           context: "."
           platforms: ${{ env.TARGET_PLATFORMS }}
