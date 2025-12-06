@@ -131,6 +131,7 @@ jobs:
           echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo 'EXAMPLE_IMAGE_TAG='"${IMAGE_TAG}-example1" | tee -a "$GITHUB_OUTPUT"
+          echo EXAMPLE_IMAGE_TAG_SAFE="$(echo "${EXAMPLE_IMAGE_TAG}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo REPOSITORY="${REPOSITORY}"| tee -a "$GITHUB_OUTPUT"
           echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")"| tee -a "$GITHUB_OUTPUT"
@@ -148,7 +149,7 @@ jobs:
           push: true
           platforms: ${{ env.TARGET_PLATFORMS }}
           context: "."
-          file: Dockerfile.alpine
+          file: buildroot/Dockerfile.alpine
           sbom: true
           provenance: mode=max
           target: buildroot
@@ -165,7 +166,6 @@ jobs:
               SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
               BUILD_ROOT=/d
           tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot"
-          outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar
 
       -
         name: Create Image
@@ -176,11 +176,10 @@ jobs:
           DOCKER_BUILD_SUMMARY: false
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
-          allow: network.host,security.insecure  # due to using a file that has a sec contxt
           push: true
           context: "."
           platforms: ${{ env.TARGET_PLATFORMS }}
-          file: Dockerfile.alpine
+          file: runtime/Dockerfile.alpine
           cache-to: |
               type=gha,mode=max
           cache-from: |
@@ -193,9 +192,9 @@ jobs:
               BASE_IMAGE_DIGEST=${{ steps.image_env.outputs.BASE_IMAGE_DIGEST }}
               PYTHON_VERSION=${{ steps.image_env.outputs.PYTHON_VERSION }}
               SOURCE_IMAGE=${{ steps.image_env.outputs.SOURCE_IMAGE }}
+              BUILDROOT_IMAGE=${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot@${{ steps.buildroot.outputs.digest }}
               BUILD_ROOT=/d
           tags: "${{ steps.image_env.outputs.IMAGE_TAG }}"
-          outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
           labels: ${{steps.image_env.outputs.IMAGE_LABELS}}
           sbom: true
           provenance: mode=max
@@ -229,7 +228,6 @@ jobs:
           build-args: |
               SOURCE_IMAGE=${{ steps.image_env.outputs.IMAGE_TAG }}
           tags: "${{ steps.image_env.outputs.IMAGE_TAG }}-example1"
-          outputs: type=oci,dest=${{ steps.image_env.outputs.IMAGE_HOME }}/example1-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar
       - 
         id: test
         name: Test Example
@@ -313,7 +311,33 @@ jobs:
 
       -
         id: post_build
+        name: 'download multiplatform images'
         run: |
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }} \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar \
+              &
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar \
+              &
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }} \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG_SAFE }}.tar \
+              &
+          wait
           docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
 
           IMAGE_DIGEST='${{steps.runtime.outputs.digest}}'

@@ -60,6 +60,11 @@ jobs:
         id: setup
         name: Setup
         run: |
+          DEBUG_OUTPUT=/dev/null
+          if [ x"${DEBUG_DOCKERD:-}" = x1 ]; then
+            DEBUG_OUTPUT="$GITHUB_STEP_SUMMARY"
+          fi
+
           setup_registry () {
             registry_id=$(docker run \
               -p5000:5000 \
@@ -88,11 +93,11 @@ jobs:
           }
 
           sudo apt-get -y install skopeo
-          setup_containerd_snapshotter | tee -a "$GITHUB_STEP_SUMMARY"
+          setup_containerd_snapshotter | tee -a "$DEBUG_OUTPUT"
           {
             printf '## Registry info:\n\n'
             setup_registry | tee -a "$GITHUB_OUTPUT"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$DEBUG_OUTPUT "
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -112,18 +117,21 @@ jobs:
             'localhost:5000'
 
           docker pull -q "${SOURCE_IMAGE}" || true
-          echo "IMAGE_HOME=$(mktemp -d)" | tee -a "$GITHUB_OUTPUT"
-          echo ALPINE_VERSION="${ALPINE_VERSION}" | tee -a "$GITHUB_OUTPUT"
-          echo PYTHON_VERSION="${PYTHON_VERSION}" | tee -a "$GITHUB_OUTPUT"
-          echo SOURCE_IMAGE="${SOURCE_IMAGE}" | tee -a "$GITHUB_OUTPUT"
-          echo IMAGE_TAG="${IMAGE_TAG}" | tee -a "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot" | tee -a "$GITHUB_OUTPUT"
-          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
-          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
-          echo REPOSITORY="${REPOSITORY}" | tee -a "$GITHUB_OUTPUT"
-          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )" | tee -a "$GITHUB_OUTPUT"
-          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")" | tee -a "$GITHUB_OUTPUT"
-          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.'  | tee -a "$GITHUB_OUTPUT"
+          echo "IMAGE_HOME=$(mktemp -d)" >> "$GITHUB_OUTPUT"
+
+          echo ALPINE_VERSION="${ALPINE_VERSION}"| tee -a "$GITHUB_OUTPUT"
+          echo PYTHON_VERSION="${PYTHON_VERSION}"| tee -a "$GITHUB_OUTPUT"
+          echo SOURCE_IMAGE="${SOURCE_IMAGE}"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG="${IMAGE_TAG}"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG="${IMAGE_TAG}-buildroot"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo 'EXAMPLE_IMAGE_TAG='"${IMAGE_TAG}-example1" | tee -a "$GITHUB_OUTPUT"
+          echo EXAMPLE_IMAGE_TAG_SAFE="$(echo "${EXAMPLE_IMAGE_TAG}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo REPOSITORY="${REPOSITORY}"| tee -a "$GITHUB_OUTPUT"
+          echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")"| tee -a "$GITHUB_OUTPUT"
+          echo 'IMAGE_DESCRIPTION=${{ github.event.repository.description }}. See ${{ github.server_url }}/${{ github.repository }} for more info.' | tee -a "$GITHUB_OUTPUT"
 
       -
         name: Create Buildroot
@@ -254,7 +262,8 @@ jobs:
             >&2 printf 'pulled %s (%s)\n' "$IMAGE_TAG" "$platform"
           done
           {
-            printf '## images\n\n```'
+            printf '# Test\n\n'
+            printf '## Source Images\n\n```'
             docker images --tree $IMAGE_URI | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"
             printf '\n```\n'
           } | tee -a "$GITHUB_STEP_SUMMARY"
@@ -296,7 +305,33 @@ jobs:
 
       -
         id: post_build
+        name: 'download multiplatform images'
         run: |
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }} \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar \
+              &
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar \
+              &
+          skopeo copy \
+              --src-no-creds \
+              --src-tls-verify=false \
+              --quiet \
+              --multi-arch all \
+                docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }} \
+                oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG_SAFE }}.tar \
+              &
+          wait
           docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
 
           IMAGE_DIGEST='${{steps.runtime.outputs.digest}}'
