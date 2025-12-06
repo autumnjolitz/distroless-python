@@ -18,7 +18,7 @@ fi
 set -e
 set -o pipefail
 
-if [ "$1" = '-O' ] || [ "$1" = '--optimize' ]; then
+if [ "x${1:-}" = 'x-O' ] || [ "x${1:-}" = 'x--optimize' ]; then
     PIP_OPTIMIZE='1'
     shift
 fi
@@ -34,16 +34,16 @@ fini () {
     local rc=$?
     local extra=-q
     local new_packages=
-    if [ "$DEBUG" = 1 ]; then
+    if [ "x${DEBUG:-}" = x1 ]; then
         extra=
     fi
 
-    if [ $PIP_OPTIMIZE = '1' ]; then
+    if [ x${PIP_OPTIMIZE:-} = 'x1' ]; then
         python -m pip freeze >"$AFTER_PACKAGES"
         rv=0
         new_packages="$(diff -Naur "$BEFORE_PACKAGES" "$AFTER_PACKAGES" | grep -vE '^\+\+' | grep -E '^\+' | cut -f2 -d+ | cut -f1 -d= | xargs)" || rv=$?
         if [ "x$new_packages" != 'x' ]; then
-            if [ "$DEBUG" = '1' ]; then
+            if [ "x${DEBUG:-}" = 'x1' ]; then
                 >&2 echo "Optimizing packages (${new_packages})..."
             fi
             for package in $new_packages
@@ -57,7 +57,7 @@ fini () {
                 done
             done
         else
-            if [ "$DEBUG" = '1' ]; then
+            if [ "x${DEBUG:-}" = 'x1' ]; then
                 >&2 echo 'No new packages installed or changed to optimize with.'
             fi
         fi
@@ -80,7 +80,7 @@ case "$1" in
     ;;
 esac
 
-if [ $PIP_OPTIMIZE = '1' ]; then
+if [ x$PIP_OPTIMIZE = 'x1' ]; then
     BEFORE_PACKAGES=$(mktemp)
     AFTER_PACKAGES=$(mktemp)
     python -m pip freeze >"$BEFORE_PACKAGES"
@@ -104,11 +104,11 @@ case "$@" in
         for package_name in $maybe_packages
         do
             if case "$package_name" in *'=='*) true ;; *) false ;; esac ; then
-                package_name="$(echo "${package_name}" | cut -d= -f1 | xargs)"
+                package_name="$(echo "${package_name}" | cut -d'=' -f1 | xargs)"
             fi
             # if the package is already installed, flag it
             # as if it wasn't installed so we can optimize it
-            if [ x$package_name != x ] && >/dev/null pip show "${package_name}"; then
+            if [ x$package_name != x ] && pip show "${package_name}" >/dev/null ; then
                 sed -i'' '/^'"${package_name}"'==/d' $BEFORE_PACKAGES
             fi
         done
