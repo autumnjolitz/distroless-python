@@ -131,7 +131,7 @@ jobs:
           echo IMAGE_TAG_SAFE="$(echo "$IMAGE_TAG" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo IMAGE_BUILDROOT_TAG_SAFE="$(echo "${IMAGE_TAG}-buildroot" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo 'EXAMPLE_IMAGE_TAG='"${IMAGE_TAG}-example1" | tee -a "$GITHUB_OUTPUT"
-          echo EXAMPLE_IMAGE_TAG_SAFE="$(echo "${EXAMPLE_IMAGE_TAG}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
+          echo EXAMPLE_IMAGE_TAG_SAFE="$(echo "${IMAGE_TAG}-example1" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo REPOSITORY="${REPOSITORY}"| tee -a "$GITHUB_OUTPUT"
           echo REPOSITORY_SAFE="$(echo "${REPOSITORY}" | base64 -w 0 )"| tee -a "$GITHUB_OUTPUT"
           echo BASE_IMAGE_DIGEST="$(digest_of "$SOURCE_IMAGE")"| tee -a "$GITHUB_OUTPUT"
@@ -318,7 +318,7 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.IMAGE_TAG }} \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }}@${{ steps.runtime.outputs.digest }} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar \
               &
           skopeo copy \
@@ -326,7 +326,7 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot \
+                docker://${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot@${{steps.buildroot.outputs.digest}} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar \
               &
           skopeo copy \
@@ -334,9 +334,8 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }} \
+                docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}@${{steps.build_test.outputs.digest}} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG_SAFE }}.tar \
-              &
           wait
           docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
 

@@ -92,6 +92,7 @@ RUN --security=insecure \
 RUN \
     --mount=type=cache,id=pip-cache-${TARGETARCH}${TARGETVARIANT},sharing=shared,target=/root/.cache/pip \
     set -eu ; \
+    export SOURCE_DATE_EPOCH=0 ; \
     chroot-apk add \
         coreutils-env \
         $(apk info -R .python-rundeps | grep -vE ':$') \
