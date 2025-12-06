@@ -66,7 +66,7 @@ fini () {
     export ALLOW_SITE_PACKAGES=1
     find $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/site-packages \
         -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists $extra {}" \; ;
-    return 0
+    return $rc
 }
 
 trap fini EXIT
@@ -88,18 +88,32 @@ fi
 
 case "$@" in
     *'--force-reinstall'*|optimize*)
+    maybe_packages=
+    index=-1
     for package_name in $@
     do
-        if case "$package_name" in '-'*) false ;; *) true ;; esac ; then
-            if >/dev/null pip show "${package_name}"; then
-                sed -i'' '/^'"${package_name}"'==/d' $BEFORE_PACKAGES
+        if ! case "$package_name" in '-'*) true ;; *) false ;; esac ; then
+            index="$(expr $index \+ 1)" || true  # ARJ: expr 0  returns 1 lol
+            if [ $index -ne 0 ]; then
+                maybe_packages="${maybe_packages} $package_name"
             fi
         fi
     done
+    package_name=
+    if [ x$maybe_packages != x ]; then
+        for package_name in $maybe_packages
+        do
+            # if the package is already installed, flag it
+            # as if it wasn't installed so we can optimize it
+            if >/dev/null pip show "${package_name}"; then
+                sed -i'' '/^'"${package_name}"'==/d' $BEFORE_PACKAGES
+            fi
+        done
+    fi
     ;;
 esac
 
-if [ $1 = optimize ]; then
+if [ x$1 = xoptimize ]; then
     shift
     if [ x"$@" = x ]; then
         >&2 echo 'optimize [PACKAGE] [PACKAGE2] ... [PACKAGEN]
