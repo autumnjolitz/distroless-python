@@ -119,3 +119,13 @@ RUN \
     # regenerate the ca-certs!
     chroot-exec update-ca-certificates && \
     chroot-pip --optimize install --force-reinstall setuptools
+COPY <<EOF --chmod=755 /$BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/ensurepip.py
+import sys
+
+if __name__ == "__main__":
+    print("""
+ensurepip is removed to save space
+please install the package in the buildroot image via chroot-pip
+and then COPY it over (using --from=) into your image root.
+""", sys.stderr)
+EOF
