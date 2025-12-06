@@ -97,7 +97,7 @@ jobs:
           {
             printf '## Registry info:\n\n'
             setup_registry | tee -a "$GITHUB_OUTPUT"
-          } | tee -a "$DEBUG_OUTPUT "
+          } | tee -a "$DEBUG_OUTPUT"
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
