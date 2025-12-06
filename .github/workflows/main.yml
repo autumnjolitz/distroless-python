@@ -601,7 +601,7 @@ jobs:
         with:
           if-no-files-found: error
           retention-days: 1
-          name: upload-alpine${{ matrix.alpine }}-python${{ matrix.python }}-metadata
+          name: upload-alpine${{ matrix.alpine }}-python${{ matrix.python }}-${{ matrix.repository}}-metadata
           path: |
             manifest.txt
             packages.txt
