@@ -14,6 +14,13 @@ elif [ "x${SOURCE_DATE_EPOCH:-}" = x- ]; then
     # will have the effect of clearing the default SOURCE_DATE_EPOCH
     SOURCE_DATE_EPOCH=
 fi
+if [ "x${PIP_ROOT_USER_ACTION:-}" = x ]; then
+    PIP_ROOT_USER_ACTION=
+elif [ "x${PIP_ROOT_USER_ACTION:-}" = x- ]; then
+    # ARJ: if the PIP_ROOT_USER_ACTION is '-' then it
+    # will have the effect of clearing the default PIP_ROOT_USER_ACTION
+    PIP_ROOT_USER_ACTION=ignore
+fi
 
 set -e
 set -o pipefail
