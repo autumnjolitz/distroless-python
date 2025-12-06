@@ -103,9 +103,12 @@ case "$@" in
     if [ x$maybe_packages != x ]; then
         for package_name in $maybe_packages
         do
+            if case "$package_name" in *'=='*) true ;; *) false ;; esac ; then
+                package_name="$(echo "${package_name}" | cut -d= -f1 | xargs)"
+            fi
             # if the package is already installed, flag it
             # as if it wasn't installed so we can optimize it
-            if >/dev/null pip show "${package_name}"; then
+            if [ x$package_name != x ] && >/dev/null pip show "${package_name}"; then
                 sed -i'' '/^'"${package_name}"'==/d' $BEFORE_PACKAGES
             fi
         done
@@ -113,7 +116,7 @@ case "$@" in
     ;;
 esac
 
-if [ x$1 = xoptimize ]; then
+if [ x"${1:-}" = xoptimize ]; then
     shift
     if [ x"$@" = x ]; then
         >&2 echo 'optimize [PACKAGE] [PACKAGE2] ... [PACKAGEN]
