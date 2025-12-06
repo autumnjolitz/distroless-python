@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1.20-labs
-
+# syntax=docker/dockerfile:1
 
 ARG ALPINE_VERSION=3.20
 ARG PYTHON_VERSION=3.12
@@ -15,7 +14,6 @@ ARG BUILD_ROOT='/dest'
 ENV BUILD_ROOT=$BUILD_ROOT \
     PYTHON_VERSION=$PYTHON_VERSION \
     ALPINE_VERSION=$ALPINE_VERSION
-COPY --from=buildroot /dev /dev
 COPY --from=buildroot $BUILD_ROOT /
 LABEL \
     org.opencontainers.image.authors="distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>" \
