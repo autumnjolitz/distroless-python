@@ -119,7 +119,8 @@ RUN \
     # regenerate the ca-certs!
     chroot-exec update-ca-certificates && \
     chroot-pip --optimize install --force-reinstall setuptools
-COPY <<EOF --chmod=755 /$BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/ensurepip.py
+
+COPY --chmod=755 <<EOF /$BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/ensurepip.py
 import sys
 
 if __name__ == "__main__":
