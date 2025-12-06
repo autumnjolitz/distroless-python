@@ -648,11 +648,11 @@ jobs:
             printf '# values.json\n\n```'
             cat \
               $(find ./dist-images -type f -name 'values.json' -print) | \
-                jq -r --slurp '[.[]] | flatten' | tee ./values.json
+                jq -r --slurp '[.[].images] | flatten' | tee ./values.json
             printf '```\n\n'
           } | tee -a "$GITHUB_STEP_SUMMARY"
           find ./dist-images \
-            -type \( -name manifest.txt -o -name packages.txt -o -name values.json \) \
+            -type f \( -name manifest.txt -o -name packages.txt -o -name values.json \) \
             -delete
           >./README.rst python \
             -m jinplate.cli \
