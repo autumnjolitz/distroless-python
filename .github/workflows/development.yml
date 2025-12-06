@@ -266,6 +266,7 @@ jobs:
             docker pull --platform $platform -q "$IMAGE_URI"
             >&2 printf 'pulled %s (%s)\n' "$IMAGE_TAG" "$platform"
           done
+          docker pull -q "$IMAGE_URI"
           {
             printf '# Test\n\n'
             printf '## Source Images\n\n```'
@@ -318,7 +319,7 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.IMAGE_TAG }}@${{ steps.runtime.outputs.digest }} \
+                docker://$(echo '${{ steps.image_env.outputs.IMAGE_TAG }}' | rev | cut -d: -f2- | rev)@${{ steps.runtime.outputs.digest }} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_TAG_SAFE }}.tar \
               &
           skopeo copy \
@@ -326,7 +327,7 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot@${{steps.buildroot.outputs.digest}} \
+                docker://$(echo '${{ steps.image_env.outputs.IMAGE_TAG }}-buildroot' | rev | cut -d: -f2- | rev)@${{steps.buildroot.outputs.digest}} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.IMAGE_BUILDROOT_TAG_SAFE }}.tar \
               &
           skopeo copy \
@@ -334,7 +335,7 @@ jobs:
               --src-tls-verify=false \
               --quiet \
               --multi-arch all \
-                docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}@${{steps.build_test.outputs.digest}} \
+                docker://$(echo '${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}' | rev | cut -d: -f2- | rev)@${{steps.build_test.outputs.digest}} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG_SAFE }}.tar \
               &
           wait
