@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.20-labs
+
+
+ARG ALPINE_VERSION=3.20
+ARG PYTHON_VERSION=3.12
+ARG BUILDROOT_IMAGE=docker.io/autumnjolitz/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}-buildroot
+FROM ${BUILDROOT_IMAGE} AS buildroot
+
+FROM scratch AS distroless-python
+ARG ALPINE_VERSION=3.20
+ARG PYTHON_VERSION=3.12
+ARG SOURCE_IMAGE=docker.io/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}
+ARG BASE_IMAGE_DIGEST
+ARG BUILD_ROOT='/dest'
+ENV BUILD_ROOT=$BUILD_ROOT \
+    PYTHON_VERSION=$PYTHON_VERSION \
+    ALPINE_VERSION=$ALPINE_VERSION
+COPY --from=buildroot /dev /dev
+COPY --from=buildroot $BUILD_ROOT /
+LABEL \
+    org.opencontainers.image.authors="distroless-python image developers <autumn.jolitz+distroless-python@gmail.com>" \
+    org.opencontainers.image.source="https://github.com/autumnjolitz/distroless-python" \
+    org.opencontainers.image.title="Distroless Python ${PYTHON_VERSION} on alpine${ALPINE_VERSION}" \
+    org.opencontainers.image.description="Distroless, optimized Python images distilled from the DockerHub official Python images. These images only have a python interpreter and the dash shell." \
+    org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}" \
+    org.opencontainers.image.base.name="$SOURCE_IMAGE" \
+    distroless.python-version="${PYTHON_VERSION}" \
+    distroless.alpine-version="${ALPINE_VERSION}" \
+    distroless.base-image="alpine${ALPINE_VERSION}"
+
+SHELL ["/usr/bin/dash", "-c"]
+ENTRYPOINT [ "/usr/local/bin/python" ]
