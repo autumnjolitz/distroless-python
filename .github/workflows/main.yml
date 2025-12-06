@@ -572,7 +572,7 @@ jobs:
           {
             printf '# Uploaded\n\n```'
             cat manifest.txt
-            print '```\n\n'
+            printf '```\n\n'
           } >>"$GITHUB_STEP_SUMMARY"
 
           for filename in $(echo dist-images/image-*.tar)
