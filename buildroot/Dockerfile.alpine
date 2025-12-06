@@ -6,7 +6,8 @@ ARG PYTHON_VERSION=3.12
 ARG SOURCE_IMAGE=docker.io/python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}
 ARG BASE_IMAGE_DIGEST
 
-FROM ${SOURCE_IMAGE}@${BASE_IMAGE_DIGEST} AS buildroot
+FROM ${SOURCE_IMAGE}@${BASE_IMAGE_DIGEST} AS source
+FROM source AS buildroot
 ARG PYTHON_VERSION=3.12
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -23,6 +24,7 @@ ENV BUILD_ROOT=$BUILD_ROOT \
     _ln="chroot $BUILD_ROOT /bin/ln" \
     _chroot="chroot $BUILD_ROOT"
 
+COPY --from=source /dev /$BUILD_ROOT/dev
 ADD --chmod=0755 chroot-apk.sh /usr/local/bin/chroot-apk
 ADD --chmod=0755 chroot-pip.sh /usr/local/bin/chroot-pip
 ADD --chmod=0755 chroot-ln.sh /usr/local/bin/chroot-ln
@@ -47,8 +49,9 @@ RUN \
         $BUILD_ROOT/usr/local/lib/python$PYTHON_VERSION/site-packages \
         $BUILD_ROOT/usr/local/bin \
         $BUILD_ROOT/proc \
+        $BUILD_ROOT/sys \
+        $BUILD_ROOT/dev \
     ; \
-    cp -R /dev $BUILD_ROOT/dev ; \
     # copy the apk related confs
     cp -R /etc/apk $BUILD_ROOT/etc/apk ; \
     $_apk_add --initdb ; \
@@ -63,7 +66,9 @@ RUN \
 
 RUN --security=insecure \
     set -eu ; \
-    mount --bind /proc /$BUILD_ROOT/proc ; \
+    mount -t proc none $BUILD_ROOT/proc ; \
+    mount -t sysfs none $BUILD_ROOT/sys ; \
+    mount --rbind /dev /$BUILD_ROOT/dev ; \
     $_apk_add \
         busybox \
         dash \
@@ -97,15 +102,6 @@ RUN \
     # compile all py to an adjacent pyc and remove the original, leaving only the bytecode
     python -m compileall -q -b /usr/local/lib/python$PYTHON_VERSION ; \
     find -type f -name '*.py' -exec sh -c "remove-py-if-pyc-exists -q {}" \; ;\
-    # copy dash into the container so we can use it as the default bin/sh
-    # tar -C / -cpf - $(\
-    #     apk info -L \
-    #         dash \
-    #         dash-binsh \
-    #         ca-certificates \
-    #     | grep -vE ':$' \
-    #     ) | tar -C $BUILD_ROOT -xpf - ; \
-    # $_ln -sf /usr/bin/dash /bin/sh ; \
     (\
         cd /usr/local/lib && \
         tar -C /usr/local/lib -cpf - python$PYTHON_VERSION/lib-dynload libpython*  | tar -C $BUILD_ROOT/usr/local/lib -xpf - ; \
