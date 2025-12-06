@@ -373,7 +373,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        registry:
+        repository:
           - docker.io
           - ghcr.io
         python:
@@ -436,17 +436,19 @@ jobs:
       -
         name: Rename files
         run: |
-          printf 'Images:\n\n' >> "$GITHUB_STEP_SUMMARY"
-          for filename in $(find dist-images -type f -name "*.tar" -print)
-          do
-            image_uri="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
-            new_image_uri=$(echo $image_uri | sed 's|localhost:5000|${{ matrix.repository }}|g')
-            new_filename="dist-images/image-$(echo $new_image_uri | base64 -w 0).tar"
-            cp ${filename} ${new_filename}
-            printf '* `'${new_filename}'` (`'${new_image_uri}'`)\n' >> "$GITHUB_STEP_SUMMARY"
-            rm $filename
-          done
-          printf '\n' >> "GITHUB_STEP_SUMMARY"
+          {
+            printf 'Images:\n\n'
+            for filename in $(find dist-images -type f -name "*.tar" -print)
+            do
+              image_uri="$(basename -s .tar $filename | sed 's/image-//g' | base64 -d)"
+              new_image_uri=$(echo $image_uri | sed 's|localhost:5000|${{ matrix.repository }}|g')
+              new_filename="dist-images/image-$(echo $new_image_uri | base64 -w 0).tar"
+              cp ${filename} ${new_filename}
+              printf '* `'${new_filename}'` (`'${new_image_uri}'`)\n'
+              rm $filename
+            done
+            printf '\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: login to dockerhub
         if: ${{ matrix.repository == 'docker.io' }}
@@ -457,7 +459,7 @@ jobs:
             login \
               --password-stdin \
               --username ${{ github.repository_owner }} \
-              '${{ matrix.registry }}'
+              '${{ matrix.repository }}'
 
       - name: login to ghcr
         if: ${{ matrix.repository == 'ghcr.io' }}
@@ -468,7 +470,7 @@ jobs:
             login \
               --password-stdin \
               --username ${{ github.repository_owner }} \
-              '${{ matrix.registry }}'
+              '${{ matrix.repository }}'
       -
         name: upload to registry
         run: |
