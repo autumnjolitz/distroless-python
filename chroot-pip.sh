@@ -7,6 +7,14 @@ fi
 
 DEBUG="${CHROOT_PIP_DEBUG:-0}"
 
+if [ "x${SOURCE_DATE_EPOCH:-}" = x ]; then
+    SOURCE_DATE_EPOCH=0
+elif [ "x${SOURCE_DATE_EPOCH:-}" = x- ]; then
+    # ARJ: if the SOURCE_DATE_EPOCH is '-' then it
+    # will have the effect of clearing the default SOURCE_DATE_EPOCH
+    SOURCE_DATE_EPOCH=
+fi
+
 set -e
 set -o pipefail
 
