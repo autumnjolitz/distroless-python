@@ -336,6 +336,7 @@ jobs:
               --multi-arch all \
                 docker://${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG }}@${{steps.build_test.outputs.digest}} \
                 oci-archive://${{ steps.image_env.outputs.IMAGE_HOME }}/image-${{ steps.image_env.outputs.EXAMPLE_IMAGE_TAG_SAFE }}.tar \
+              &
           wait
           docker stop '${{ steps.setup.outputs.REGISTRY_CONTAINER_ID }}'
 
