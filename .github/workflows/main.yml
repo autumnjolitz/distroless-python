@@ -648,7 +648,7 @@ jobs:
             printf '# values.json\n\n```'
             cat \
               $(find ./dist-images -type f -name 'values.json' -print) | \
-                jq -r --slurp '[.[].images] | flatten' | tee ./values.json
+                jq -r --slurp '[.[].images] | flatten | {"images": .}' | tee ./values.json
             printf '```\n\n'
           } | tee -a "$GITHUB_STEP_SUMMARY"
           find ./dist-images \
