@@ -89,23 +89,22 @@ fi
 case "$@" in
     *'--force-reinstall'*|optimize*)
     maybe_packages=
-    index=-1
+    index='-1'
     for package_name in $@
     do
-        if ! case "$package_name" in '-'*) true ;; *) false ;; esac ; then
-            index="$(expr $index \+ 1)" || true  # ARJ: expr 0  returns 1 lol
-            if [ $index -ne 0 ]; then
-                maybe_packages="${maybe_packages} $package_name"
-            fi
-        fi
-    done
-    package_name=
-    if [ x$maybe_packages != x ]; then
-        for package_name in $maybe_packages
-        do
+        if [ x"$package_name" != x ] && ! case "$package_name" in '-'*) true ;; *) false ;; esac ; then
+            index="$(expr $index \+ 1)" || index='0'
             if case "$package_name" in *'=='*) true ;; *) false ;; esac ; then
                 package_name="$(echo "${package_name}" | cut -d'=' -f1 | xargs)"
             fi
+            if [ $index -ne 0 ]; then
+                maybe_packages="${maybe_packages} ${package_name}"
+            fi
+        fi
+    done
+    if [ x$maybe_packages != x ]; then
+        for package_name in $maybe_packages
+        do
             # if the package is already installed, flag it
             # as if it wasn't installed so we can optimize it
             if [ x$package_name != x ] && pip show "${package_name}" >/dev/null ; then
