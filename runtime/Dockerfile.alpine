@@ -24,7 +24,9 @@ LABEL \
     org.opencontainers.image.base.name="$SOURCE_IMAGE" \
     distroless.python-version="${PYTHON_VERSION}" \
     distroless.alpine-version="${ALPINE_VERSION}" \
-    distroless.base-image="alpine${ALPINE_VERSION}"
+    distroless.base-image="alpine${ALPINE_VERSION}" \
+    org.alpine.version="${ALPINE_VERSION}" \
+    org.python.version="${PYTHON_VERSION}"
 
 SHELL ["/usr/bin/dash", "-c"]
 ENTRYPOINT [ "/usr/local/bin/python" ]
