@@ -32,6 +32,8 @@ ADD --chmod=0755 remove-py-if-pyc-exists.sh /usr/local/bin/remove-py-if-pyc-exis
 ADD --chmod=0755 chroot-exec.sh /usr/local/bin/chroot-exec
 RUN \
     set -eu ; \
+    /usr/bin/env apk update ; \
+    /usr/bin/env apk upgrade ; \
     $_sys_apk_add \
         dash \
         # TLS certs
