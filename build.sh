@@ -18,12 +18,17 @@ if [ "x$BASE_IMAGE_DIGEST" = 'x' ]; then
 fi
 
 >&2 echo "BASE_IMAGE_DIGEST=${BASE_IMAGE_DIGEST}"
+extra='--allow security.insecure'
+if [ "${DOCKER_BUILDER:-}" != '' ]; then
+    extra="${extra} --builder ${DOCKER_BUILDER}"
+fi
 
 if ! >"$log" 2>&1 docker build \
     --build-arg "ALPINE_VERSION=${ALPINE_VERSION}" \
     --build-arg "BASE_IMAGE_DIGEST=${BASE_IMAGE_DIGEST}" \
     --build-arg "PYTHON_VERSION=${PYTHON_VERSION}" \
     --build-arg "BUILD_ROOT=/d" \
+    $extra \
     -f buildroot/Dockerfile.alpine \
     -t "${IMAGE_TAG}-buildroot" \
     . ; then
@@ -37,6 +42,7 @@ if ! >"$log" 2>&1 docker build \
     --build-arg "PYTHON_VERSION=${PYTHON_VERSION}" \
     --build-arg "BUILD_ROOT=/d" \
     --build-arg "SOURCE_IMAGE=${IMAGE_TAG}-buildroot" \
+    $extra \
     -f buildroot/Dockerfile.alpine \
     -t "${IMAGE_TAG}" \
     . ; then
