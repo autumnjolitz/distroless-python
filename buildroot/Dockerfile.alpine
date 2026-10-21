@@ -34,7 +34,10 @@ RUN \
     set -eu ; \
     /usr/bin/env apk update ; \
     /usr/bin/env apk upgrade ; \
+    # force upgrade ca-certificates
+    /usr/bin/env apk add --upgrade ca-certificates ; \
     $_sys_apk_add \
+        --upgrade \
         dash \
         # TLS certs
         ca-certificates \
@@ -84,10 +87,9 @@ RUN --security=insecure \
         usr/share/apk \
     | tar -C "$CACHE_ROOT" -xpf - ; \
     rm -rf $BUILD_ROOT/bin/ln $BUILD_ROOT/bin/busybox $BUILD_ROOT/etc/apk $BUILD_ROOT/var/cache/apk $BUILD_ROOT/usr/share/apk && \
-    chroot-apk add \
+    chroot-apk --upgrade add \
         ca-certificates \
-        # needed for update-ca-certificates to work:
-        run-parts
+        run-parts # needed for update-ca-certificates to work
 
 RUN \
     --mount=type=cache,id=pip-cache-${TARGETARCH}${TARGETVARIANT},sharing=shared,target=/root/.cache/pip \
